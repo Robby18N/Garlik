@@ -27,7 +27,9 @@ const STATUS_STYLES = {
   Partial: 'border-transparent bg-[rgba(249,115,22,0.08)] text-[#f97316]',
 };
 
-const PAYMENT_METHODS = ['Cash', 'Transfer', 'Kartu', 'BPJS'];
+// Klinik tidak menerima BPJS sebagai metode pembayaran — hanya metode yang
+// dibayar tunai/penuh saat itu juga.
+const PAYMENT_METHODS = ['Cash', 'Transfer', 'Kartu'];
 
 export function formatRupiah(value) {
   return `Rp ${Math.round(value).toLocaleString('id-ID')}`;

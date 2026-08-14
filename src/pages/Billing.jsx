@@ -32,13 +32,13 @@ import { cn } from '@/lib/utils';
 // balance tracking, and a daily transaction log).
 const BILLING_INVOICES_INITIAL = [
   { id: 1, invoiceNo: 'INV-20260814-001', patientName: 'Agung Wijaya Kusuma', mrn: 'P-0001', doctor: 'drg. SM', date: '14 Aug 2026 08:40', items: [{ name: 'Scaling', price: 350000 }], method: 'Cash', status: 'Paid', paidAmount: 350000 },
-  { id: 2, invoiceNo: 'INV-20260814-002', patientName: 'Siti Rahmawati', mrn: 'P-0002', doctor: 'drg. AN', date: '14 Aug 2026 09:05', items: [{ name: 'Tambal Gigi', price: 250000 }], method: 'BPJS', status: 'Paid', paidAmount: 250000 },
+  { id: 2, invoiceNo: 'INV-20260814-002', patientName: 'Siti Rahmawati', mrn: 'P-0002', doctor: 'drg. AN', date: '14 Aug 2026 09:05', items: [{ name: 'Tambal Gigi', price: 250000 }], method: 'Transfer', status: 'Paid', paidAmount: 250000 },
   { id: 3, invoiceNo: 'INV-20260814-003', patientName: 'Budi Santoso', mrn: 'P-0003', doctor: 'drg. SM', date: '14 Aug 2026 09:20', items: [{ name: 'Scaling', price: 350000 }], method: null, status: 'Unpaid', paidAmount: 0 },
   { id: 4, invoiceNo: 'INV-20260814-004', patientName: 'Dewi Lestari', mrn: 'P-0004', doctor: 'drg. RF', date: '14 Aug 2026 09:35', items: [{ name: 'Konsultasi', price: 100000 }, { name: 'Obat Pereda Nyeri', price: 45000 }], method: 'Transfer', status: 'Paid', paidAmount: 145000 },
   { id: 5, invoiceNo: 'INV-20260814-005', patientName: 'Andi Pratama', mrn: 'P-0005', doctor: 'drg. AN', date: '14 Aug 2026 09:55', items: [{ name: 'Tambal Gigi', price: 250000 }], method: 'Cash', status: 'Partial', paidAmount: 100000 },
   { id: 6, invoiceNo: 'INV-20260814-006', patientName: 'Rina Marlina', mrn: 'P-0006', doctor: 'drg. SM', date: '14 Aug 2026 10:10', items: [{ name: 'Perawatan Gigi Sensitif', price: 150000 }], method: 'Kartu', status: 'Paid', paidAmount: 150000 },
   { id: 7, invoiceNo: 'INV-20260814-007', patientName: 'Fajar Hidayat', mrn: 'P-0007', doctor: 'drg. RF', date: '14 Aug 2026 10:25', items: [{ name: 'Cabut Gigi', price: 300000 }, { name: 'Obat Antibiotik', price: 60000 }], method: null, status: 'Unpaid', paidAmount: 0 },
-  { id: 8, invoiceNo: 'INV-20260814-008', patientName: 'Nur Aisyah', mrn: 'P-0008', doctor: 'drg. AN', date: '14 Aug 2026 10:40', items: [{ name: 'Pembersihan Karang Gigi', price: 300000 }], method: 'BPJS', status: 'Paid', paidAmount: 300000 },
+  { id: 8, invoiceNo: 'INV-20260814-008', patientName: 'Nur Aisyah', mrn: 'P-0008', doctor: 'drg. AN', date: '14 Aug 2026 10:40', items: [{ name: 'Pembersihan Karang Gigi', price: 300000 }], method: 'Kartu', status: 'Paid', paidAmount: 300000 },
   { id: 9, invoiceNo: 'INV-20260814-009', patientName: 'Dimas Saputra', mrn: 'P-0009', doctor: 'drg. SM', date: '14 Aug 2026 10:55', items: [{ name: 'Tambal Gigi', price: 250000 }], method: 'Cash', status: 'Partial', paidAmount: 150000 },
   { id: 10, invoiceNo: 'INV-20260814-010', patientName: 'Maya Sari', mrn: 'P-0010', doctor: 'drg. RF', date: '14 Aug 2026 11:10', items: [{ name: 'Konsultasi', price: 100000 }], method: 'Transfer', status: 'Paid', paidAmount: 100000 },
   { id: 11, invoiceNo: 'INV-20260814-011', patientName: 'Rizky Ramadhan', mrn: 'P-0011', doctor: 'drg. AN', date: '14 Aug 2026 11:25', items: [{ name: 'Perawatan Gusi', price: 200000 }], method: null, status: 'Unpaid', paidAmount: 0 },
@@ -129,7 +129,7 @@ export default function Billing() {
       .filter((inv) => inv.status !== 'Paid')
       .map((inv) => ({ ...inv, outstanding: inv.total - inv.paidAmount }));
     const revenueToday = invoicesWithTotal.reduce((sum, inv) => sum + inv.paidAmount, 0);
-    const revenueByMethod = ['Cash', 'Transfer', 'Kartu', 'BPJS'].map((method) => ({
+    const revenueByMethod = ['Cash', 'Transfer', 'Kartu'].map((method) => ({
       method,
       value: invoicesWithTotal
         .filter((inv) => inv.method === method)
@@ -219,7 +219,7 @@ export default function Billing() {
 
               <StatCard
                 icon={<AlertCircle className="size-4" />}
-                title="Belum Lunas"
+                title="Menunggu Pembayaran"
                 count={stats.outstandingList.length}
                 showDetail={showDetail}
               >
