@@ -12,6 +12,7 @@ import {
   Wallet,
   FileSpreadsheet,
   Settings2,
+  ClipboardCheck,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -28,6 +29,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 const NAV_ITEMS = [
   { icon: LayoutGrid, key: 'grid', label: 'Dashboard' },
   { icon: CalendarSearch, key: 'patients', label: "Today's Patient", path: '/patients' },
+  { icon: ClipboardCheck, key: 'screening', label: 'Skrining', path: '/screening' },
   { icon: FileUser, key: 'records', label: 'Records', path: '/records' },
   { icon: Database, key: 'database', label: 'Database' },
   { icon: BriefcaseMedical, key: 'clinical', label: 'Clinical' },
@@ -44,12 +46,12 @@ const NAV_ITEMS = [
 // No partial/"view only" state anymore: if a role can't actually use a
 // menu, it's left off the rail entirely instead of showing a locked icon.
 // Receptionist keeps only the menus tiered as full-access in our UAM
-// breakdown (Records, Activity, Billing, Reminders); Database, Labs,
-// Wallet, Reports, Clinical, and Settings are all out of scope for now.
+// breakdown (Skrining, Records, Activity, Billing, Reminders); Database,
+// Labs, Wallet, Reports, Clinical, and Settings are all out of scope for now.
 // Doctor and Admin aren't scoped yet beyond "full access" — narrow these
 // as those roles get defined.
 const ROLE_ACCESS = {
-  Receptionist: ['grid', 'patients', 'records', 'activity', 'billing', 'reminders'],
+  Receptionist: ['grid', 'patients', 'screening', 'records', 'activity', 'billing', 'reminders'],
   Doctor: NAV_ITEMS.map((item) => item.key),
   Admin: NAV_ITEMS.map((item) => item.key),
 };

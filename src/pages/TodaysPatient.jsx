@@ -23,6 +23,7 @@ import SummaryCards from '@/components/summary-cards';
 import PatientNameHoverCard from '@/components/patient-name-hover-card';
 import PatientDetailSheet from '@/components/patient-detail-sheet';
 import PatientNotFoundDialog from '@/components/patient-not-found-dialog';
+import MakeAppointmentDialog from '@/components/make-appointment-dialog';
 import SettingRoomLabDialog from '@/components/setting-room-lab-dialog';
 import MrCheckIcon from '@/components/mr-check-icon';
 import TodaysPatientSkeleton from '@/components/todays-patient-skeleton';
@@ -158,6 +159,11 @@ export default function TodaysPatient() {
   // stay "-" until then, and auto-fill per-doctor once it's set.
   const [roomLabSettingOpen, setRoomLabSettingOpen] = useState(false);
   const [roomLabSettings, setRoomLabSettings] = useState(null);
+
+  // "Buat Appointment" popup opened from the toolbar's "Appointment" button —
+  // finds an already-registered patient, then books their appointment
+  // (doctor/room/keluhan/duration/date/time).
+  const [appointmentDialogOpen, setAppointmentDialogOpen] = useState(false);
 
   function handleSaveRoomLabSettings(nextSettings) {
     setRoomLabSettings(nextSettings);
@@ -342,7 +348,7 @@ export default function TodaysPatient() {
 
                 <Button
                   size="sm"
-                  onClick={() => toast.info('Fitur Appointment akan segera hadir')}
+                  onClick={() => setAppointmentDialogOpen(true)}
                   className="h-9 rounded-3xl bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700"
                 >
                   <Plus className="size-4" />
@@ -535,6 +541,7 @@ export default function TodaysPatient() {
             onOpenChange={setDetailOpen}
           />
           <PatientNotFoundDialog open={notFoundOpen} onOpenChange={setNotFoundOpen} />
+          <MakeAppointmentDialog open={appointmentDialogOpen} onOpenChange={setAppointmentDialogOpen} />
           <SettingRoomLabDialog
             open={roomLabSettingOpen}
             onOpenChange={setRoomLabSettingOpen}

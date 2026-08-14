@@ -25,7 +25,12 @@ import {
 // being forced to the same width.
 const W = (px) => ({ flexGrow: px, flexBasis: `${px}px` });
 
-const STEPS = ['Input Data Patient', 'Medical Record'];
+const STEPS_DEFAULT = ['Input Data Patient', 'Medical Record'];
+// The "make an appointment" flow (reached from the toolbar search / "Patient
+// not yet registered" popups) gets its own dedicated third step instead of
+// cramming the appointment fields into step 1 — mirrors Figma's Stepper
+// component pattern used elsewhere in the app (see stepper.jsx).
+const STEPS_WITH_APPOINTMENT = ['Input Data Patient', 'Medical Record', 'Appointment'];
 
 // Kept identical to the values used across the Today's Patient table so a
 // registration made here (name/category/doctor/room/duration) is never out
@@ -149,6 +154,7 @@ export default function Registration() {
   const navigate = useNavigate();
   const location = useLocation();
   const isAppointmentFlow = location.state?.flow === 'make-appointment';
+  const STEPS = isAppointmentFlow ? STEPS_WITH_APPOINTMENT : STEPS_DEFAULT;
 
   const [step, setStep] = useState(0);
   const [patientData, setPatientData] = useState(initialPatientData);
@@ -198,8 +204,31 @@ export default function Registration() {
     );
   }
 
+  function handleNextFromMedicalRecord() {
+    if (isAppointmentFlow) {
+      setStep(2);
+      return;
+    }
+    handleSave();
+  }
+
   function handleSave() {
-    toast.success('Patient registered successfully');
+    if (isAppointmentFlow) {
+      const required = [
+        ['appointmentDoctor', 'Doctor'],
+        ['appointmentRoom', 'Room'],
+        ['appointmentDate', 'Appointment Date'],
+        ['appointmentTime', 'Appointment Time'],
+      ];
+      const missing = required.find(([field]) => !patientData[field]);
+      if (missing) {
+        toast.error(`Please fill in ${missing[1]}`);
+        return;
+      }
+      toast.success('Patient registered and appointment booked successfully');
+    } else {
+      toast.success('Patient registered successfully');
+    }
     navigate('/patients');
   }
 
@@ -253,13 +282,17 @@ export default function Registration() {
               <div className="flex items-center gap-1 text-sm">
                 <span className="text-[#64748b]">Today Patient</span>
                 <ChevronRight className="size-3.5 text-[#64748b]" />
-                <span className="text-[#0a0a0a]">New Registration</span>
+                <span className="text-[#0a0a0a]">
+                  {isAppointmentFlow ? 'Registration & Appointment' : 'New Registration'}
+                </span>
               </div>
             </div>
 
             <Card className="gap-0 rounded-2xl p-4">
               <div className="border-b border-[#e2e8f0] pb-2">
-                <p className="text-base font-semibold text-[#020617]">New Registration</p>
+                <p className="text-base font-semibold text-[#020617]">
+                  {isAppointmentFlow ? 'Registration & Appointment' : 'New Registration'}
+                </p>
               </div>
 
               {/* Stepper — Figma's stepper band sits on a faint dot-grid texture */}
@@ -513,55 +546,6 @@ export default function Registration() {
                       </FieldRow>
                     </div>
 
-                    {isAppointmentFlow && (
-                      <div className="flex flex-col gap-3">
-                        <SectionHeader>Appointment</SectionHeader>
-                        <FieldRow>
-                          <SelectField
-                            label="Doctor"
-                            options={DOCTORS}
-                            value={patientData.appointmentDoctor}
-                            onChange={(e) => updatePatient('appointmentDoctor', e.target.value)}
-                            style={W(172)}
-                          />
-                          <SelectField
-                            label="Room"
-                            options={ROOMS}
-                            value={patientData.appointmentRoom}
-                            onChange={(e) => updatePatient('appointmentRoom', e.target.value)}
-                            style={W(172)}
-                          />
-                          <TextField
-                            label="Keluhan"
-                            placeholder="Type here.."
-                            value={patientData.appointmentKeluhan}
-                            onChange={(e) => updatePatient('appointmentKeluhan', e.target.value)}
-                            style={W(270)}
-                          />
-                          <SelectField
-                            label="Est. Duration"
-                            options={DURATIONS}
-                            value={patientData.appointmentDuration}
-                            onChange={(e) => updatePatient('appointmentDuration', e.target.value)}
-                            style={W(172)}
-                          />
-                          <DateField
-                            label="Appointment Date"
-                            iconPosition="right"
-                            value={patientData.appointmentDate}
-                            onChange={(e) => updatePatient('appointmentDate', e.target.value)}
-                            style={W(172)}
-                          />
-                          <TextField
-                            label="Appointment Time"
-                            type="time"
-                            value={patientData.appointmentTime}
-                            onChange={(e) => updatePatient('appointmentTime', e.target.value)}
-                            style={W(172)}
-                          />
-                        </FieldRow>
-                      </div>
-                    )}
                   </CardContent>
 
                   <div className="flex items-center justify-end gap-4 border-t border-[#e2e8f0] px-0 pt-4">
@@ -580,7 +564,7 @@ export default function Registration() {
                     </button>
                   </div>
                 </form>
-              ) : (
+              ) : step === 1 ? (
                 <div>
                   <CardContent className="flex flex-col gap-6 px-0 pt-5">
                     <div>
@@ -703,6 +687,86 @@ export default function Registration() {
                       className="min-h-9 rounded-lg border border-solid border-[#ef4444] px-6 py-2.5 text-sm font-medium text-[#ef4444] hover:bg-red-50"
                     >
                       Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleNextFromMedicalRecord}
+                      className="min-h-9 rounded-lg bg-[#16a34a] px-6 py-2.5 text-sm font-medium text-white hover:bg-green-700"
+                    >
+                      {isAppointmentFlow ? 'Next' : 'Save'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <CardContent className="flex flex-col gap-5 px-0 pt-5">
+                    <div className="flex flex-col gap-3">
+                      <SectionHeader first>Appointment</SectionHeader>
+                      <p className="text-sm text-[#64748b]">
+                        Tentukan jadwal appointment untuk{' '}
+                        <span className="font-medium text-[#020617]">
+                          {patientData.firstName || 'pasien ini'}
+                        </span>
+                        .
+                      </p>
+                      <FieldRow>
+                        <SelectField
+                          label="Doctor"
+                          required
+                          options={DOCTORS}
+                          value={patientData.appointmentDoctor}
+                          onChange={(e) => updatePatient('appointmentDoctor', e.target.value)}
+                          style={W(172)}
+                        />
+                        <SelectField
+                          label="Room"
+                          required
+                          options={ROOMS}
+                          value={patientData.appointmentRoom}
+                          onChange={(e) => updatePatient('appointmentRoom', e.target.value)}
+                          style={W(172)}
+                        />
+                        <TextField
+                          label="Keluhan"
+                          placeholder="Type here.."
+                          value={patientData.appointmentKeluhan}
+                          onChange={(e) => updatePatient('appointmentKeluhan', e.target.value)}
+                          style={W(270)}
+                        />
+                        <SelectField
+                          label="Est. Duration"
+                          options={DURATIONS}
+                          value={patientData.appointmentDuration}
+                          onChange={(e) => updatePatient('appointmentDuration', e.target.value)}
+                          style={W(172)}
+                        />
+                        <DateField
+                          label="Appointment Date"
+                          required
+                          iconPosition="right"
+                          value={patientData.appointmentDate}
+                          onChange={(e) => updatePatient('appointmentDate', e.target.value)}
+                          style={W(172)}
+                        />
+                        <TextField
+                          label="Appointment Time"
+                          required
+                          type="time"
+                          value={patientData.appointmentTime}
+                          onChange={(e) => updatePatient('appointmentTime', e.target.value)}
+                          style={W(172)}
+                        />
+                      </FieldRow>
+                    </div>
+                  </CardContent>
+
+                  <div className="flex items-center justify-end gap-4 border-t border-[#e2e8f0] px-0 pt-4">
+                    <button
+                      type="button"
+                      onClick={() => setStep(1)}
+                      className="min-h-9 rounded-lg border border-solid border-[#e2e8f0] px-6 py-2.5 text-sm font-medium text-[#334155] hover:bg-slate-50"
+                    >
+                      Back
                     </button>
                     <button
                       type="button"
