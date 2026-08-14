@@ -5,6 +5,7 @@ import { Toaster } from '@/components/ui/sonner';
 import Login from '@/pages/Login';
 import TodaysPatient from '@/pages/TodaysPatient';
 import Registration from '@/pages/Registration';
+import Records from '@/pages/Records';
 import PageTransition from '@/components/page-transition';
 import { RoleProvider } from '@/context/role-context';
 
@@ -21,6 +22,7 @@ function AnimatedRoutes() {
         <Route path="/" element={<PageTransition><Login /></PageTransition>} />
         <Route path="/patients" element={<PageTransition><TodaysPatient /></PageTransition>} />
         <Route path="/registration" element={<PageTransition><Registration /></PageTransition>} />
+        <Route path="/records" element={<PageTransition><Records /></PageTransition>} />
       </Routes>
     </AnimatePresence>
   );

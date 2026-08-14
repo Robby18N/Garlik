@@ -28,7 +28,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 const NAV_ITEMS = [
   { icon: LayoutGrid, key: 'grid', label: 'Dashboard' },
   { icon: CalendarSearch, key: 'patients', label: "Today's Patient", path: '/patients' },
-  { icon: FileUser, key: 'records', label: 'Records' },
+  { icon: FileUser, key: 'records', label: 'Records', path: '/records' },
   { icon: Database, key: 'database', label: 'Database' },
   { icon: BriefcaseMedical, key: 'clinical', label: 'Clinical' },
   { icon: Activity, key: 'activity', label: 'Activity' },

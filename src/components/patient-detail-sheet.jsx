@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { Phone, AlertTriangle, Info, CalendarClock } from 'lucide-react'
+import { Phone, AlertTriangle, Info, CalendarClock, Lock, Stethoscope, Pill } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 import {
@@ -10,6 +10,24 @@ import {
 } from '@/components/ui/sheet'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
+import { useRole } from '@/context/role-context'
+
+// Payment status shown alongside each visit in the History tab — same flat
+// badge language as the Today's Patient status column.
+const PAYMENT_STYLES = {
+  Paid: 'border-transparent bg-[rgba(34,197,94,0.08)] text-[#16a34a]',
+  Unpaid: 'border-transparent bg-[rgba(239,68,68,0.08)] text-[#ef4444]',
+  Partial: 'border-transparent bg-[rgba(249,115,22,0.08)] text-[#f97316]',
+}
+
+function PaymentBadge({ status }) {
+  if (!status) return null
+  return (
+    <Badge className={cn('rounded-full px-2 py-0.5 text-[11px]', PAYMENT_STYLES[status] ?? PAYMENT_STYLES.Unpaid)}>
+      {status}
+    </Badge>
+  )
+}
 
 // Matches the verified category colors from Figma node 555:869 (the
 // Nama-column hover card) so the tag reads identically everywhere it appears.
@@ -46,7 +64,7 @@ function getInitials(name) {
     .join('')
 }
 
-const TABS = ['History', 'Detail Patient', 'Medical Record', 'Appointment']
+const TABS = ['History', 'Detail Patient', 'Medical Record', 'Clinical', 'Appointment']
 
 function HistoryTab({ patient }) {
   const visits = patient.visitHistory?.length
@@ -72,7 +90,7 @@ function HistoryTab({ patient }) {
         >
           <div className="flex w-full items-center justify-between">
             <span className="text-xs font-semibold tracking-wide text-muted-foreground">
-              Kunjungan Terakhir
+              {i === 0 ? 'Kunjungan Terakhir' : 'Kunjungan'}
             </span>
             <span className="text-[13px] text-muted-foreground">
               {visit.date ?? '-'}
@@ -81,11 +99,14 @@ function HistoryTab({ patient }) {
           <div className="text-[13px] text-foreground">
             {visit.treatment ? `Riwayat Treatment : ${visit.treatment}` : '-'}
           </div>
-          {visit.doctor && (
-            <div className="text-[13px] font-semibold text-foreground">
-              {visit.doctor}
-            </div>
-          )}
+          <div className="flex items-center justify-between gap-2">
+            {visit.doctor && (
+              <div className="text-[13px] font-semibold text-foreground">
+                {visit.doctor}
+              </div>
+            )}
+            <PaymentBadge status={visit.payment} />
+          </div>
         </div>
       ))}
     </div>
@@ -174,6 +195,62 @@ function MedicalRecordTab({ patient }) {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// Clinical detail (diagnosis + prescription per visit) is intentionally
+// locked for every role except Doctor — Receptionist and Admin can see
+// that visits happened (History tab) and basic medical background
+// (Medical Record tab) but not the clinical judgment behind them.
+function ClinicalTab({ patient }) {
+  const { role } = useRole()
+  const visits = patient.visitHistory?.filter((v) => v.diagnosis || v.prescription) ?? []
+
+  if (role !== 'Doctor') {
+    return (
+      <div className="flex w-full flex-col items-center gap-2 rounded-xl border border-dashed border-border bg-slate-50/60 p-8 text-center">
+        <div className="flex size-10 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+          <Lock className="size-4" />
+        </div>
+        <p className="text-[13px] font-medium text-foreground">Akses terbatas</p>
+        <p className="max-w-[280px] text-[13px] text-muted-foreground">
+          Detail klinis (diagnosa &amp; resep) hanya dapat diakses oleh role Dokter.
+        </p>
+      </div>
+    )
+  }
+
+  if (!visits.length) {
+    return (
+      <div className="rounded-xl border border-border bg-white p-4 text-sm text-muted-foreground">
+        No clinical record available.
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex w-full flex-col gap-3">
+      {visits.map((visit, i) => (
+        <div key={i} className="flex w-full flex-col gap-2.5 rounded-xl border border-border bg-white p-[17px]">
+          <div className="flex w-full items-center justify-between">
+            <span className="text-xs font-semibold tracking-wide text-muted-foreground">{visit.date ?? '-'}</span>
+            <span className="text-[13px] text-muted-foreground">{visit.doctor}</span>
+          </div>
+          {visit.diagnosis && (
+            <div className="flex items-start gap-2 text-[13px] text-foreground">
+              <Stethoscope className="mt-0.5 size-3.5 shrink-0 text-slate-400" />
+              <span><span className="font-semibold">Diagnosa:</span> {visit.diagnosis}</span>
+            </div>
+          )}
+          {visit.prescription && (
+            <div className="flex items-start gap-2 text-[13px] text-foreground">
+              <Pill className="mt-0.5 size-3.5 shrink-0 text-slate-400" />
+              <span><span className="font-semibold">Resep:</span> {visit.prescription}</span>
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   )
 }
@@ -318,6 +395,7 @@ export default function PatientDetailSheet({ patient, open, onOpenChange }) {
               {activeTab === 'History' && <HistoryTab patient={patient} />}
               {activeTab === 'Detail Patient' && <DetailPatientTab patient={patient} />}
               {activeTab === 'Medical Record' && <MedicalRecordTab patient={patient} />}
+              {activeTab === 'Clinical' && <ClinicalTab patient={patient} />}
               {activeTab === 'Appointment' && <AppointmentTab patient={patient} />}
             </div>
           </>
