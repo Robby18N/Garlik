@@ -302,23 +302,23 @@ export default function TodaysPatient() {
                       key={patient.id}
                       className={cn('border-b border-[#e2e8f0]', index % 2 === 1 && 'bg-[#f8fafc]')}
                     >
-                      <TableCell className="!align-top py-3 text-left text-[#334155]">{index + 1}</TableCell>
-                      <TableCell className="!align-top py-3 text-left">
+                      <TableCell className="!align-middle py-3 text-left text-[#334155]">{index + 1}</TableCell>
+                      <TableCell className="!align-middle py-3 text-left">
                         <div className="flex items-center justify-start">
                           <MrCheckIcon variant={patient.mr} />
                         </div>
                       </TableCell>
-                      <TableCell className="!align-top py-3 text-left text-[#334155]">{patient.appt}</TableCell>
-                      <TableCell className="!align-top py-3 text-left">
+                      <TableCell className="!align-middle py-3 text-left text-[#334155]">{patient.appt}</TableCell>
+                      <TableCell className="!align-middle py-3 text-left">
                         <PatientNameHoverCard name={patient.name} category={patient.category} />
                       </TableCell>
-                      <TableCell className="!align-top py-3 text-left text-[#334155]">{patient.dokter}</TableCell>
-                      <TableCell className="!align-top py-3 text-left text-[#334155]">{patient.room}</TableCell>
-                      <TableCell className="!align-top py-3 whitespace-normal text-left text-[#334155]">
+                      <TableCell className="!align-middle py-3 text-left text-[#334155]">{patient.dokter}</TableCell>
+                      <TableCell className="!align-middle py-3 text-left text-[#334155]">{patient.room}</TableCell>
+                      <TableCell className="!align-middle py-3 whitespace-normal text-left text-[#334155]">
                         {patient.keluhan}
                       </TableCell>
-                      <TableCell className="!align-top py-3 text-left text-[#334155]">{patient.durasi}</TableCell>
-                      <TableCell className="!align-top py-3 text-left">
+                      <TableCell className="!align-middle py-3 text-left text-[#334155]">{patient.durasi}</TableCell>
+                      <TableCell className="!align-middle py-3 text-left">
                         {patient.status ? (
                           <Badge className={cn('rounded-full px-2.5 py-1', STATUS_STYLES[patient.status])}>
                             {patient.status}
@@ -327,8 +327,8 @@ export default function TodaysPatient() {
                           <span className="text-[#94a3b8]">-</span>
                         )}
                       </TableCell>
-                      <TableCell className="!align-top py-3 text-left text-[#334155]">{patient.lab}</TableCell>
-                      <TableCell className="!align-top py-3 text-left">
+                      <TableCell className="!align-middle py-3 text-left text-[#334155]">{patient.lab}</TableCell>
+                      <TableCell className="!align-middle py-3 text-left">
                         {/* Free-text, auto-growing remark — height follows the number
                             of lines/paragraphs typed, and the row height (shared by
                             every cell above, all pinned to align-top) grows with it. */}
@@ -353,7 +353,7 @@ export default function TodaysPatient() {
                           className="block w-full resize-none overflow-hidden rounded-md border border-transparent bg-transparent p-1 text-left text-sm text-[#334155] outline-none placeholder:text-slate-400 hover:border-slate-200 focus:border-slate-300 focus:bg-white focus:shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)]"
                         />
                       </TableCell>
-                      <TableCell className="!align-top py-3 text-left">
+                      <TableCell className="!align-middle py-3 text-left">
                         <div className="flex items-center justify-start gap-2">
                           <button
                             type="button"
@@ -378,7 +378,7 @@ export default function TodaysPatient() {
                   ))}
                   {visiblePatients.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={12} className="h-16 text-center text-[#64748b]">
+                      <TableCell colSpan={12} className="h-16 text-left text-[#64748b]">
                         Tidak ada pasien dengan nama tersebut.
                       </TableCell>
                     </TableRow>
