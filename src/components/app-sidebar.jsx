@@ -48,11 +48,17 @@ const NAV_ITEMS = [
 // Receptionist keeps only the menus tiered as full-access in our UAM
 // breakdown (Skrining, Records, Activity, Billing, Reminders); Database,
 // Labs, Wallet, Reports, Clinical, and Settings are all out of scope for now.
-// Doctor and Admin aren't scoped yet beyond "full access" — narrow these
-// as those roles get defined.
+// Doctor is scoped to their own clinical workflow: Today's Patient (view +
+// status/remark only, no register/appointment — enforced in the page
+// itself), Records, Activity (their own room/queue), plus Labs and
+// Database as reference views. Billing, Reminders, Screening, Wallet,
+// Reports and Settings stay out of scope — those are front-desk/admin
+// concerns, not a doctor's.
+// Admin isn't scoped yet beyond "full access" — narrow this as that role
+// gets defined.
 const ROLE_ACCESS = {
   Receptionist: ['grid', 'patients', 'screening', 'records', 'activity', 'billing', 'reminders'],
-  Doctor: NAV_ITEMS.map((item) => item.key),
+  Doctor: ['grid', 'patients', 'records', 'activity', 'labs', 'database'],
   Admin: NAV_ITEMS.map((item) => item.key),
 };
 

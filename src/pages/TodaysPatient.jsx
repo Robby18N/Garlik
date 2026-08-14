@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Moon, Bell, Search, Plus, Eye, Pencil, ArrowUpDown, X } from 'lucide-react';
+import { Moon, Bell, Search, Plus, Eye, Pencil, ArrowUpDown, X, MessageSquare, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { Switch } from '@/components/ui/switch';
 
@@ -9,6 +9,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import AccountMenu from '@/components/account-menu';
 import {
   Table,
@@ -28,6 +35,7 @@ import SettingRoomLabDialog from '@/components/setting-room-lab-dialog';
 import MrCheckIcon from '@/components/mr-check-icon';
 import TodaysPatientSkeleton from '@/components/todays-patient-skeleton';
 import roomsLabsIcon from '@/assets/rooms-labs-icon.png';
+import { useRole } from '@/context/role-context';
 import { cn } from '@/lib/utils';
 
 const STATUS_STYLES = {
@@ -125,9 +133,127 @@ function formatHeaderDate(date) {
   return `${weekday} ${date.getDate()} ${month} ${date.getFullYear()}`;
 }
 
+// Formatted by hand (rather than toLocaleTimeString) so new chat messages
+// always read "HH:MM" — same reasoning as Activity.jsx's identical helper.
+function nowTimeLabel() {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+const STATUS_OPTIONS = Object.keys(STATUS_STYLES);
+
+/**
+ * Remark column, reimagined as a two-way chat thread between Receptionist
+ * and Doctor instead of a single free-text field — a doctor flagging
+ * something on a patient (e.g. "sudah dipanggil ke R1") should reach the
+ * receptionist and vice versa, not just overwrite one shared note. Clicking
+ * the cell opens a small floating thread (Popover) with the message
+ * history and a compose box; the cell itself shows a preview of the latest
+ * message so the table stays scannable without opening anything.
+ */
+function RemarkChatCell({ patient, thread, senderLabel, onSend }) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState('');
+
+  function handleSend() {
+    const trimmed = draft.trim();
+    if (!trimmed) return;
+    onSend(patient.id, trimmed);
+    setDraft('');
+  }
+
+  const lastMessage = thread[thread.length - 1];
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label={`Remark conversation for ${patient.name}`}
+          className="flex w-full items-center gap-1.5 rounded-md border border-transparent p-1 text-left text-sm text-[#334155] hover:border-slate-200 hover:bg-white"
+        >
+          <MessageSquare className="size-3.5 shrink-0 text-slate-400" />
+          <span className="min-w-0 flex-1 truncate">
+            {lastMessage ? lastMessage.text : (
+              <span className="text-slate-400">Tulis remark...</span>
+            )}
+          </span>
+          {thread.length > 0 && (
+            <span className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-500">
+              {thread.length}
+            </span>
+          )}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" sideOffset={8} className="w-[300px] p-0">
+        <div className="flex flex-col gap-2 border-b border-[#e2e8f0] px-3 py-2.5">
+          <p className="text-sm font-semibold text-slate-800">Percakapan &middot; {patient.name}</p>
+          <p className="text-[11px] text-slate-400">Resepsionis &amp; Dokter</p>
+        </div>
+        <div className="flex max-h-52 flex-col gap-2 overflow-y-auto px-3 py-2.5">
+          {thread.length === 0 ? (
+            <p className="py-4 text-center text-xs text-slate-400">Belum ada pesan.</p>
+          ) : (
+            thread.map((msg) => {
+              const isDoctorMsg = msg.sender !== 'Receptionist';
+              return (
+                <div
+                  key={msg.id}
+                  className={cn('flex max-w-[85%] flex-col gap-0.5', isDoctorMsg && 'ml-auto items-end')}
+                >
+                  <div
+                    className={cn(
+                      'rounded-lg px-2.5 py-1.5 text-[13px]',
+                      isDoctorMsg ? 'bg-green-600 text-white' : 'bg-slate-100 text-slate-700'
+                    )}
+                  >
+                    {msg.text}
+                  </div>
+                  <span className="px-0.5 text-[10px] text-slate-400">
+                    {msg.sender} &middot; {msg.time}
+                  </span>
+                </div>
+              );
+            })
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 border-t border-[#e2e8f0] p-2">
+          <input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
+            placeholder={`Balas sebagai ${senderLabel}...`}
+            aria-label={`Reply as ${senderLabel} for ${patient.name}`}
+            className="h-8 w-full min-w-0 rounded-md border border-[#e2e8f0] bg-white px-2.5 text-[13px] text-slate-700 outline-none placeholder:text-slate-400 focus:border-slate-300"
+          />
+          <button
+            type="button"
+            aria-label="Send message"
+            onClick={handleSend}
+            className="flex size-8 shrink-0 items-center justify-center rounded-md bg-green-600 text-white hover:bg-green-700"
+          >
+            <Send className="size-3.5" />
+          </button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export default function TodaysPatient() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { role, doctorName } = useRole();
+  // Doctor is scoped to their own clinical workflow: can't register a new
+  // patient or book an appointment (that stays a front-desk job), and only
+  // ever sees the roster of patients actually assigned to them.
+  const isDoctor = role === 'Doctor';
+  const chatSenderLabel = isDoctor ? doctorName : 'Receptionist';
   // Shimmer skeleton shown only for the specific Login → Today's Patient
   // handoff (flagged via router state from the login loading screen) — a
   // brief loading pass before the real header/summary cards/table crossfade
@@ -154,14 +280,40 @@ export default function TodaysPatient() {
   // open on every single keystroke while the user is still typing.
   const [notFoundOpen, setNotFoundOpen] = useState(false);
   const [apptSortAsc, setApptSortAsc] = useState(true);
-  // Remark column is freely editable per row — seeded from the mock data
-  // (both Today's and Tomorrow's schedules), keyed by patient id so edits
-  // survive sorting/filtering/switching days.
-  const [remarks, setRemarks] = useState(() =>
+  // Remark is a two-way chat thread (Receptionist <-> Doctor) per patient
+  // now, not a single free-text field — seeded from the mock data's
+  // original remark string as the opening message from Receptionist, keyed
+  // by patient id so the thread survives sorting/filtering/switching days.
+  const [remarkThreads, setRemarkThreads] = useState(() =>
     Object.fromEntries(
-      [...MOCK_PATIENTS, ...MOCK_PATIENTS_TOMORROW].map((p) => [p.id, p.remark])
+      [...MOCK_PATIENTS, ...MOCK_PATIENTS_TOMORROW].map((p) => [
+        p.id,
+        p.remark && p.remark !== '-'
+          ? [{ id: `${p.id}-seed`, sender: 'Receptionist', text: p.remark, time: p.appt }]
+          : [],
+      ])
     )
   );
+
+  function handleSendRemark(patientId, text) {
+    setRemarkThreads((prev) => ({
+      ...prev,
+      [patientId]: [
+        ...(prev[patientId] ?? []),
+        { id: `${patientId}-${Date.now()}`, sender: chatSenderLabel, text, time: nowTimeLabel() },
+      ],
+    }));
+  }
+
+  // Status column is read-only for everyone except Doctor — clinical
+  // progress (Complete/Late/Cancel/Waiting) is their call to make, not the
+  // front desk's. Keyed by patient id so it survives sorting/filtering.
+  const [statusOverrides, setStatusOverrides] = useState({});
+
+  function handleChangeStatus(patient, nextStatus) {
+    setStatusOverrides((prev) => ({ ...prev, [patient.id]: nextStatus }));
+    toast.success(`Status ${patient.name} diperbarui ke "${nextStatus}"`);
+  }
 
   // "Setting Room & Lab" popup (Figma node 556:859), opened from the
   // toolbar's "Rooms & Labs" button. `roomLabSettings` is null until the
@@ -210,12 +362,19 @@ export default function TodaysPatient() {
     );
   }
 
-  const visiblePatients = useMemo(() => {
-    const source = dayFilter === 'Tomorrow' ? MOCK_PATIENTS_TOMORROW : MOCK_PATIENTS;
+  // The day's full roster before any search/name filtering — scoped down to
+  // just this doctor's own patients when acting as Doctor, so the table,
+  // the "Showing X of Y" count, and the not-found check all agree on what
+  // "the list" means for this login.
+  const daySource = useMemo(() => {
+    const base = dayFilter === 'Tomorrow' ? MOCK_PATIENTS_TOMORROW : MOCK_PATIENTS;
+    return isDoctor ? base.filter((p) => p.dokter === doctorName) : base;
+  }, [dayFilter, isDoctor, doctorName]);
 
+  const visiblePatients = useMemo(() => {
     const byName = nameQuery.trim()
-      ? source.filter((p) => p.name.toLowerCase().includes(nameQuery.trim().toLowerCase()))
-      : source;
+      ? daySource.filter((p) => p.name.toLowerCase().includes(nameQuery.trim().toLowerCase()))
+      : daySource;
 
     const toolbarTrimmed = toolbarQuery.trim().toLowerCase();
     const byToolbar = toolbarTrimmed
@@ -225,7 +384,7 @@ export default function TodaysPatient() {
     return [...byToolbar].sort((a, b) =>
       apptSortAsc ? a.appt.localeCompare(b.appt) : b.appt.localeCompare(a.appt)
     );
-  }, [dayFilter, nameQuery, toolbarQuery, apptSortAsc]);
+  }, [daySource, nameQuery, toolbarQuery, apptSortAsc]);
 
   // Whether the toolbar search alone (name / ID / phone, independent of the
   // Patient Name column's own search) has zero matches in the current
@@ -233,9 +392,8 @@ export default function TodaysPatient() {
   const toolbarHasNoMatch = useMemo(() => {
     const trimmed = toolbarQuery.trim().toLowerCase();
     if (!trimmed) return false;
-    const source = dayFilter === 'Tomorrow' ? MOCK_PATIENTS_TOMORROW : MOCK_PATIENTS;
-    return !source.some((p) => matchesToolbarQuery(p, trimmed));
-  }, [toolbarQuery, dayFilter]);
+    return !daySource.some((p) => matchesToolbarQuery(p, trimmed));
+  }, [toolbarQuery, daySource]);
 
   // Debounce opening the popup so it doesn't flash open after every single
   // keystroke while the user is still mid-typing a query that will match.
@@ -297,7 +455,17 @@ export default function TodaysPatient() {
 
         {/* Page body */}
         <main className="flex flex-1 flex-col gap-4 p-6">
-          <SummaryCards />
+          <SummaryCards
+            patients={
+              isDoctor
+                ? MOCK_PATIENTS.filter((p) => p.dokter === doctorName).map((p) => ({
+                    ...p,
+                    status: statusOverrides[p.id] ?? p.status,
+                  }))
+                : undefined
+            }
+            doctorScoped={isDoctor}
+          />
 
           <div className="flex flex-col gap-3 rounded-2xl bg-white p-4 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)]">
             {/* Toolbar row — rebuilt per Figma node 600:6237 ("2nd Level"):
@@ -309,7 +477,7 @@ export default function TodaysPatient() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-3">
                 <p className="text-base font-semibold text-slate-950">
-                  Showing {visiblePatients.length} of 20 entries
+                  Showing {visiblePatients.length} of {daySource.length} entries
                 </p>
 
                 {/* Today / Tomorrow toggle, matching Figma node 576:3118 — the switch
@@ -347,23 +515,30 @@ export default function TodaysPatient() {
                   )}
                 </div>
 
-                <Button
-                  size="sm"
-                  onClick={() => navigate('/registration', { state: { flow: 'new-registration' } })}
-                  className="h-9 rounded-3xl bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700"
-                >
-                  <Plus className="size-4" />
-                  New Registration
-                </Button>
+                {/* Doctor can't register a new patient or book an appointment —
+                    that stays a front-desk task, so both buttons are simply
+                    left out of their toolbar entirely. */}
+                {!isDoctor && (
+                  <>
+                    <Button
+                      size="sm"
+                      onClick={() => navigate('/registration', { state: { flow: 'new-registration' } })}
+                      className="h-9 rounded-3xl bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700"
+                    >
+                      <Plus className="size-4" />
+                      New Registration
+                    </Button>
 
-                <Button
-                  size="sm"
-                  onClick={() => setAppointmentDialogOpen(true)}
-                  className="h-9 rounded-3xl bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700"
-                >
-                  <Plus className="size-4" />
-                  Appointment
-                </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => setAppointmentDialogOpen(true)}
+                      className="h-9 rounded-3xl bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700"
+                    >
+                      <Plus className="size-4" />
+                      Appointment
+                    </Button>
+                  </>
+                )}
 
                 <Button
                   size="sm"
@@ -475,38 +650,52 @@ export default function TodaysPatient() {
                       </TableCell>
                       <TableCell className="!align-middle py-3 text-left text-[#334155]">{patient.durasi}</TableCell>
                       <TableCell className="!align-middle py-3 text-left">
-                        {patient.status ? (
-                          <Badge className={cn('rounded-full px-2.5 py-1', STATUS_STYLES[patient.status])}>
-                            {patient.status}
-                          </Badge>
-                        ) : (
-                          <span className="text-[#94a3b8]">-</span>
-                        )}
+                        {(() => {
+                          const currentStatus = statusOverrides[patient.id] ?? patient.status;
+                          if (!currentStatus) return <span className="text-[#94a3b8]">-</span>;
+                          // Only Doctor can change clinical progress — everyone
+                          // else (including Tomorrow's not-yet-happened rows)
+                          // just sees the read-only badge as before.
+                          if (!isDoctor) {
+                            return (
+                              <Badge className={cn('rounded-full px-2.5 py-1', STATUS_STYLES[currentStatus])}>
+                                {currentStatus}
+                              </Badge>
+                            );
+                          }
+                          return (
+                            <Select
+                              value={currentStatus}
+                              onValueChange={(value) => handleChangeStatus(patient, value)}
+                            >
+                              <SelectTrigger
+                                size="sm"
+                                aria-label={`Change status for ${patient.name}`}
+                                className={cn(
+                                  'w-fit gap-1 rounded-full border-none px-2.5 py-1 text-xs font-semibold shadow-none',
+                                  STATUS_STYLES[currentStatus]
+                                )}
+                              >
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {STATUS_OPTIONS.map((option) => (
+                                  <SelectItem key={option} value={option}>
+                                    {option}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell className="!align-middle py-3 text-left text-[#334155]">{labDisplay}</TableCell>
                       <TableCell className="!align-middle py-3 text-left">
-                        {/* Free-text, auto-growing remark — height follows the number
-                            of lines/paragraphs typed, and the row height (shared by
-                            every cell above, all pinned to align-top) grows with it. */}
-                        <textarea
-                          ref={(el) => {
-                            if (el) {
-                              el.style.height = 'auto';
-                              el.style.height = `${el.scrollHeight}px`;
-                            }
-                          }}
-                          value={remarks[patient.id] ?? ''}
-                          onChange={(e) =>
-                            setRemarks((prev) => ({ ...prev, [patient.id]: e.target.value }))
-                          }
-                          onInput={(e) => {
-                            e.target.style.height = 'auto';
-                            e.target.style.height = `${e.target.scrollHeight}px`;
-                          }}
-                          rows={1}
-                          placeholder="Tulis remark..."
-                          aria-label={`Remark for ${patient.name}`}
-                          className="block w-full resize-none overflow-hidden rounded-md border border-transparent bg-transparent p-1 text-left text-sm text-[#334155] outline-none placeholder:text-slate-400 hover:border-slate-200 focus:border-slate-300 focus:bg-white focus:shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)]"
+                        <RemarkChatCell
+                          patient={patient}
+                          thread={remarkThreads[patient.id] ?? []}
+                          senderLabel={chatSenderLabel}
+                          onSend={handleSendRemark}
                         />
                       </TableCell>
                       <TableCell className="!align-middle py-3 text-left">

@@ -8,6 +8,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
+import { useRole } from '@/context/role-context';
 import patientNotFoundIllustration from '@/assets/patient-not-found-illustration.png';
 
 /**
@@ -16,10 +17,14 @@ import patientNotFoundIllustration from '@/assets/patient-not-found-illustration
  * 469:6139 ("Data patient not regis"): header + description, the
  * document + magnifying glass illustration, "Patient not yet registered"
  * message, and a gradient green CTA that routes into the registration +
- * appointment flow.
+ * appointment flow. Doctor can't register or book appointments (that's a
+ * front-desk job), so this becomes a plain heads-up with no CTA for them —
+ * same restriction as the toolbar's New Registration/Appointment buttons.
  */
 export default function PatientNotFoundDialog({ open, onOpenChange }) {
   const navigate = useNavigate();
+  const { role } = useRole();
+  const isDoctor = role === 'Doctor';
 
   function handleRegisterAndBook() {
     onOpenChange(false);
@@ -59,18 +64,22 @@ export default function PatientNotFoundDialog({ open, onOpenChange }) {
           <div className="relative flex flex-col items-center gap-1 text-center">
             <p className="text-base font-bold text-[#020617]">Patient not yet registered</p>
             <p className="text-sm text-[#64748b]">
-              Please register first, by clicking the button below.
+              {isDoctor
+                ? 'Please ask the receptionist to register or book an appointment for this patient.'
+                : 'Please register first, by clicking the button below.'}
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={handleRegisterAndBook}
-            className="relative flex min-h-9 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-[#87c341] to-[#03a83d] px-6 py-2.5 text-sm font-medium text-white hover:opacity-90"
-          >
-            <UserPlus className="size-4" />
-            Registration and Make an Appointment
-          </button>
+          {!isDoctor && (
+            <button
+              type="button"
+              onClick={handleRegisterAndBook}
+              className="relative flex min-h-9 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-[#87c341] to-[#03a83d] px-6 py-2.5 text-sm font-medium text-white hover:opacity-90"
+            >
+              <UserPlus className="size-4" />
+              Registration and Make an Appointment
+            </button>
+          )}
         </div>
       </DialogContent>
     </Dialog>

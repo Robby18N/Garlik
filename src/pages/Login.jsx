@@ -7,19 +7,43 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { ACCOUNTS, useRole } from '@/context/role-context';
 
 const LOGIN_LOADING_MS = 2000;
 
 export default function Login() {
   const navigate = useNavigate();
+  const { login } = useRole();
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [error, setError] = useState('');
 
   function handleSubmit(e) {
     e.preventDefault();
     if (isLoggingIn) return;
+
+    if (!username) {
+      setError('Please select an account.');
+      return;
+    }
+    const account = login(username, password);
+    if (!account) {
+      setError('Incorrect password. Please try again.');
+      return;
+    }
+
+    setError('');
     setIsLoggingIn(true);
     // 2s loading pass before handing off to Today's Patient — `fromLogin`
     // flags that page to run its own brief shimmer skeleton before the
@@ -86,20 +110,37 @@ export default function Login() {
 
               <form className="flex w-full flex-col items-end gap-8" onSubmit={handleSubmit}>
                 <div className="flex w-full flex-col gap-8">
-                  {/* Email / phone */}
+                  {/* Account picker — replaces a free-text email/phone field
+                      with a dropdown over the fixed set of demo accounts
+                      (Receptionist, each doctor, Admin), since each one maps
+                      to a specific role + menu access rather than an
+                      arbitrary identity. */}
                   <div className="flex w-full flex-col gap-2">
-                    <Label htmlFor="identifier" className="text-base font-medium text-slate-950">
-                      Email/Phone Number
+                    <Label htmlFor="account" className="text-base font-medium text-slate-950">
+                      Account
                     </Label>
-                    <div className="flex min-h-[40px] w-full items-center rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)] focus-within:border-slate-400">
-                      <Input
-                        id="identifier"
-                        type="text"
-                        placeholder="Enter your email/phone number"
-                        disabled={isLoggingIn}
-                        className="h-auto p-0 text-base placeholder:text-slate-500 focus-visible:ring-0"
-                      />
-                    </div>
+                    <Select
+                      value={username}
+                      onValueChange={(value) => {
+                        setUsername(value);
+                        setError('');
+                      }}
+                      disabled={isLoggingIn}
+                    >
+                      <SelectTrigger
+                        id="account"
+                        className="h-auto min-h-[40px] w-full rounded-lg border-slate-200 px-4 py-3 text-base shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)] data-[placeholder]:text-slate-500"
+                      >
+                        <SelectValue placeholder="Select your account" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ACCOUNTS.map((acc) => (
+                          <SelectItem key={acc.username} value={acc.username}>
+                            {acc.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   {/* Password */}
@@ -112,6 +153,11 @@ export default function Login() {
                         id="password"
                         type={showPassword ? 'text' : 'password'}
                         placeholder="Enter your password"
+                        value={password}
+                        onChange={(e) => {
+                          setPassword(e.target.value);
+                          setError('');
+                        }}
                         disabled={isLoggingIn}
                         className="h-auto p-0 text-base placeholder:text-slate-500 focus-visible:ring-0"
                       />
@@ -125,6 +171,7 @@ export default function Login() {
                         {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                       </button>
                     </div>
+                    {error && <p className="text-sm font-medium text-red-600">{error}</p>}
                   </div>
 
                   {/* Remember me / forgot password */}

@@ -13,18 +13,38 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ROLES, useRole } from '@/context/role-context';
+import { ACCOUNTS, useRole } from '@/context/role-context';
 
-/** Account / role-switcher dropdown for the top header bar: avatar + current
- * role label + chevron trigger, a radio list of the three available
- * roles, and a Logout action at the bottom. Role lives in shared context
- * (see role-context.jsx) so AppSidebar re-renders with the right
- * hidden/restricted nav items the moment the role changes here. */
+// Avatar initials per account — a doctor account shows their own initials
+// (e.g. "drg. SM" -> "SM") instead of a fixed placeholder, since which
+// doctor is logged in actually matters (it scopes Today's Patient and the
+// remark chat's sender identity).
+function getAvatarInitials(account) {
+  if (account.role === 'Doctor') return account.doctorName.replace('drg. ', '').toUpperCase();
+  if (account.role === 'Admin') return 'AD';
+  return 'RN';
+}
+
+/** Account switcher dropdown for the top header bar: avatar + current
+ * account label + chevron trigger, a radio list of the five demo accounts
+ * (Receptionist, each doctor, Admin), and a Logout action at the bottom.
+ * This mirrors the same account list used on the Login screen, so
+ * switching here is equivalent to logging out and back in as that account
+ * — a fast way to preview each role's access without leaving the app.
+ * The active account lives in shared context (see role-context.jsx) so
+ * AppSidebar, Today's Patient, and everything else scoped to role/doctor
+ * re-renders immediately when it changes. */
 export default function AccountMenu() {
   const navigate = useNavigate();
-  const { role, setRole } = useRole();
+  const { account, applyAccount, logout } = useRole();
+
+  function handleSelectAccount(username) {
+    const next = ACCOUNTS.find((a) => a.username === username);
+    if (next) applyAccount(next);
+  }
 
   function handleLogout() {
+    logout();
     toast.success('Logged out successfully');
     navigate('/');
   }
@@ -36,21 +56,24 @@ export default function AccountMenu() {
         aria-label="Account menu"
       >
         <Avatar className="size-[30px]">
-          <AvatarFallback className="bg-green-100 text-green-700">RN</AvatarFallback>
+          <AvatarFallback className="bg-green-100 text-green-700">
+            {getAvatarInitials(account)}
+          </AvatarFallback>
         </Avatar>
-        <span className="text-sm font-medium text-slate-700">{role}</span>
+        <span className="text-sm font-medium text-slate-700">{account.label}</span>
         <ChevronDown className="size-4 text-slate-400" />
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent className="w-52">
-        <DropdownMenuLabel>Switch Role</DropdownMenuLabel>
-        <DropdownMenuRadioGroup value={role} onValueChange={setRole}>
-          {ROLES.map((r) => (
-            <DropdownMenuRadioItem key={r} value={r}>
-              {r}
+      <DropdownMenuContent className="w-56">
+        <DropdownMenuLabel>Switch Account</DropdownMenuLabel>
+        <DropdownMenuRadioGroup value={account.username} onValueChange={handleSelectAccount}>
+          {ACCOUNTS.map((acc) => (
+            <DropdownMenuRadioItem key={acc.username} value={acc.username}>
+              {acc.label}
             </DropdownMenuRadioItem>
           ))}
         </DropdownMenuRadioGroup>
+
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" onSelect={handleLogout}>
           <LogOut />

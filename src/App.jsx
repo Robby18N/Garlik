@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { Toaster } from '@/components/ui/sonner';
 
@@ -11,7 +11,16 @@ import Activity from '@/pages/Activity';
 import Billing from '@/pages/Billing';
 import Reminders from '@/pages/Reminders';
 import PageTransition from '@/components/page-transition';
-import { RoleProvider } from '@/context/role-context';
+import { RoleProvider, useRole } from '@/context/role-context';
+
+// Gate for every screen except Login: bounce back to "/" when there's no
+// authenticated account yet (fresh load, or after Logout), so the app can't
+// be reached by just typing a URL — a real login is required first.
+function RequireAuth({ children }) {
+  const { isAuthenticated } = useRole();
+  if (!isAuthenticated) return <Navigate to="/" replace />;
+  return children;
+}
 
 // Every route change (Login ↔ Today's Patient ↔ New Registration) crossfades
 // via <PageTransition> instead of hard-cutting — the "Smart Animate" style
@@ -24,13 +33,76 @@ function AnimatedRoutes() {
     <AnimatePresence mode="wait" initial={false}>
       <Routes location={location} key={location.pathname}>
         <Route path="/" element={<PageTransition><Login /></PageTransition>} />
-        <Route path="/patients" element={<PageTransition><TodaysPatient /></PageTransition>} />
-        <Route path="/registration" element={<PageTransition><Registration /></PageTransition>} />
-        <Route path="/screening" element={<PageTransition><Screening /></PageTransition>} />
-        <Route path="/records" element={<PageTransition><Records /></PageTransition>} />
-        <Route path="/activity" element={<PageTransition><Activity /></PageTransition>} />
-        <Route path="/billing" element={<PageTransition><Billing /></PageTransition>} />
-        <Route path="/reminders" element={<PageTransition><Reminders /></PageTransition>} />
+        <Route
+          path="/patients"
+          element={
+            <PageTransition>
+              <RequireAuth>
+                <TodaysPatient />
+              </RequireAuth>
+            </PageTransition>
+          }
+        />
+        <Route
+          path="/registration"
+          element={
+            <PageTransition>
+              <RequireAuth>
+                <Registration />
+              </RequireAuth>
+            </PageTransition>
+          }
+        />
+        <Route
+          path="/screening"
+          element={
+            <PageTransition>
+              <RequireAuth>
+                <Screening />
+              </RequireAuth>
+            </PageTransition>
+          }
+        />
+        <Route
+          path="/records"
+          element={
+            <PageTransition>
+              <RequireAuth>
+                <Records />
+              </RequireAuth>
+            </PageTransition>
+          }
+        />
+        <Route
+          path="/activity"
+          element={
+            <PageTransition>
+              <RequireAuth>
+                <Activity />
+              </RequireAuth>
+            </PageTransition>
+          }
+        />
+        <Route
+          path="/billing"
+          element={
+            <PageTransition>
+              <RequireAuth>
+                <Billing />
+              </RequireAuth>
+            </PageTransition>
+          }
+        />
+        <Route
+          path="/reminders"
+          element={
+            <PageTransition>
+              <RequireAuth>
+                <Reminders />
+              </RequireAuth>
+            </PageTransition>
+          }
+        />
       </Routes>
     </AnimatePresence>
   );

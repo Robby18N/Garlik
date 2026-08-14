@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { NotebookPen, UsersRound, Users, Plus, X } from 'lucide-react';
 
 import {
@@ -63,6 +63,17 @@ const STATUS_BREAKDOWN = [
   { label: 'Cancel', value: 2, dot: 'bg-red-500' },
 ];
 
+// Same four buckets as STATUS_BREAKDOWN above, but computed live from a
+// real patient list (Today's Patient's status field) instead of a fixed
+// mock — used only for the doctor-scoped variant, where the numbers have
+// to actually reflect that doctor's own roster.
+const STATUS_BUCKETS = [
+  { label: 'Waiting', dot: 'bg-orange-500', match: (s) => typeof s === 'string' && s.startsWith('Waiting') },
+  { label: 'Complete', dot: 'bg-green-500', match: (s) => s === 'Complete' },
+  { label: 'Late', dot: 'bg-purple-500', match: (s) => s === 'Late' },
+  { label: 'Cancel', dot: 'bg-red-500', match: (s) => s === 'Cancel' },
+];
+
 /**
  * Top-of-dashboard summary section: three stat cards (Sticky notes,
  * Waiting list, Status Patient) plus a "Show/Hide Detail Highlight"
@@ -79,8 +90,16 @@ const STATUS_BREAKDOWN = [
  * Sticky notes is a free-text mini notes list (add/edit/delete, kept in
  * local state). Waiting list's per-doctor row opens a popup with the
  * actual patients (name + wait time) behind that doctor's count.
+ *
+ * `patients` + `doctorScoped` are optional — when the Doctor role passes
+ * its own (already dokter-filtered) roster in, the Waiting list and
+ * Status Patient cards switch from the all-doctors mock breakdown to
+ * live numbers computed from that roster, so a doctor never sees another
+ * doctor's patients in their own summary. Leaving both props out (the
+ * Receptionist/Admin default) keeps the original mock-driven cards
+ * unchanged.
  */
-export default function SummaryCards() {
+export default function SummaryCards({ patients, doctorScoped = false }) {
   const [showDetail, setShowDetail] = useState(false);
   const [notes, setNotes] = useState(DEFAULT_STICKY_NOTES);
   const [newNote, setNewNote] = useState('');
@@ -102,6 +121,26 @@ export default function SummaryCards() {
   }
 
   const totalWaiting = WAITING_BY_DOCTOR.reduce((sum, d) => sum + d.patients.length, 0);
+
+  const doctorRoster = doctorScoped ? (patients ?? []) : [];
+
+  const doctorWaitingList = useMemo(
+    () =>
+      doctorRoster
+        .filter((p) => typeof p.status === 'string' && p.status.startsWith('Waiting'))
+        .map((p) => ({ name: p.name, wait: p.status.replace('Waiting ', '') })),
+    [doctorRoster]
+  );
+
+  const doctorStatusBreakdown = useMemo(
+    () =>
+      STATUS_BUCKETS.map((bucket) => ({
+        label: bucket.label,
+        dot: bucket.dot,
+        value: doctorRoster.filter((p) => bucket.match(p.status)).length,
+      })),
+    [doctorRoster]
+  );
 
   return (
     <div className="flex w-full flex-col gap-3">
@@ -157,40 +196,62 @@ export default function SummaryCards() {
           </div>
         </StatCard>
 
-        {/* Waiting list — each row opens a popup listing the actual
-            patients (name + wait time) behind that count. */}
+        {/* Waiting list — for Receptionist/Admin, each row opens a popup
+            listing the actual patients (name + wait time) behind that
+            doctor's count. For a Doctor, the roster is already scoped to
+            just them, so there's nothing to break down by doctor anymore —
+            it's a flat list of their own waiting patients instead. */}
         <StatCard
           icon={<UsersRound className="size-4" />}
           title="Waiting list"
-          count={totalWaiting}
+          count={doctorScoped ? doctorWaitingList.length : totalWaiting}
           showDetail={showDetail}
         >
           <div className="flex flex-col gap-1.5 overflow-y-auto">
-            {WAITING_BY_DOCTOR.map((item) => (
-              <button
-                key={item.doctor}
-                type="button"
-                onClick={() => setActiveDoctor(item.doctor)}
-                className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-1.5 text-xs transition-colors hover:border-slate-200 hover:bg-slate-50"
-              >
-                <span className="font-medium text-slate-700">{item.doctor}</span>
-                <span className="rounded-full bg-white px-2 py-0.5 font-semibold text-slate-600 ring-1 ring-slate-200">
-                  {item.patients.length} waiting
-                </span>
-              </button>
-            ))}
+            {doctorScoped ? (
+              doctorWaitingList.length === 0 ? (
+                <p className="text-[13px] text-slate-400">Tidak ada pasien menunggu.</p>
+              ) : (
+                doctorWaitingList.map((p, i) => (
+                  <div
+                    key={`${p.name}-${i}`}
+                    className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-1.5 text-xs"
+                  >
+                    <span className="font-medium text-slate-700">{p.name}</span>
+                    <span className="rounded-full bg-white px-2 py-0.5 font-semibold text-slate-600 ring-1 ring-slate-200">
+                      {p.wait}
+                    </span>
+                  </div>
+                ))
+              )
+            ) : (
+              WAITING_BY_DOCTOR.map((item) => (
+                <button
+                  key={item.doctor}
+                  type="button"
+                  onClick={() => setActiveDoctor(item.doctor)}
+                  className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-1.5 text-xs transition-colors hover:border-slate-200 hover:bg-slate-50"
+                >
+                  <span className="font-medium text-slate-700">{item.doctor}</span>
+                  <span className="rounded-full bg-white px-2 py-0.5 font-semibold text-slate-600 ring-1 ring-slate-200">
+                    {item.patients.length} waiting
+                  </span>
+                </button>
+              ))
+            )}
           </div>
         </StatCard>
 
-        {/* Status patient breakdown */}
+        {/* Status patient breakdown — real counts from this doctor's own
+            roster when doctor-scoped, otherwise the clinic-wide mock. */}
         <StatCard
           icon={<Users className="size-4" />}
           title="Status Patient"
-          count={30}
+          count={doctorScoped ? doctorRoster.length : 30}
           showDetail={showDetail}
         >
           <div className="grid flex-1 grid-cols-4 gap-2">
-            {STATUS_BREAKDOWN.map((item) => (
+            {(doctorScoped ? doctorStatusBreakdown : STATUS_BREAKDOWN).map((item) => (
               <div
                 key={item.label}
                 className="flex flex-col items-center justify-center gap-1.5 rounded-lg bg-slate-50/60 py-2"
