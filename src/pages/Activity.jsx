@@ -143,7 +143,18 @@ function FollowUpButton({ onClick, disabled }) {
   );
 }
 
-function RoomCard({ room, elapsedMin, canMutate, onCallNext, onFinish, onReady, onFollowUp }) {
+function RoomCard({
+  room,
+  elapsedMin,
+  canCallNext,
+  canFinish,
+  canMarkReady,
+  isReceptionist,
+  onCallNext,
+  onFinish,
+  onReady,
+  onFollowUp,
+}) {
   const StatusIcon = ROOM_STATUS_ICON[room.status];
   const upcoming = room.queue.slice(0, room.status === 'Available' ? 2 : 3);
   const overflow = room.queue.length - upcoming.length;
@@ -187,7 +198,7 @@ function RoomCard({ room, elapsedMin, canMutate, onCallNext, onFinish, onReady, 
               />
             </div>
           </div>
-          {canMutate ? (
+          {canFinish ? (
             <Button
               onClick={() => onFinish(room.id)}
               className="h-9 w-full rounded-full bg-green-600 text-sm font-medium text-white hover:bg-green-700"
@@ -195,9 +206,9 @@ function RoomCard({ room, elapsedMin, canMutate, onCallNext, onFinish, onReady, 
               <CheckCircle2 className="size-4" />
               Selesai Layani
             </Button>
-          ) : (
+          ) : isReceptionist ? (
             <FollowUpButton onClick={() => onFollowUp(room.id)} />
-          )}
+          ) : null}
         </div>
       )}
 
@@ -206,7 +217,7 @@ function RoomCard({ room, elapsedMin, canMutate, onCallNext, onFinish, onReady, 
           <p className="text-xs font-medium text-slate-500">
             {room.queue.length > 0 ? 'Ruangan siap — antrian menunggu' : 'Ruangan siap, belum ada antrian'}
           </p>
-          {canMutate ? (
+          {canCallNext ? (
             <Button
               onClick={() => onCallNext(room.id)}
               disabled={room.queue.length === 0}
@@ -216,7 +227,11 @@ function RoomCard({ room, elapsedMin, canMutate, onCallNext, onFinish, onReady, 
               Call Next Patient
             </Button>
           ) : (
-            <FollowUpButton onClick={() => onFollowUp(room.id)} disabled={room.queue.length === 0} />
+            // Doctor doesn't call patients in themselves — that's the
+            // front desk's job, so their own room just shows a status
+            // note here instead of an action (no Follow Up either, since
+            // following up on your own queue doesn't make sense).
+            <p className="text-center text-xs text-slate-400">Menunggu resepsionis memanggil pasien</p>
           )}
         </div>
       )}
@@ -227,7 +242,7 @@ function RoomCard({ room, elapsedMin, canMutate, onCallNext, onFinish, onReady, 
             <Brush className="size-3.5" />
             Sedang dibersihkan
           </p>
-          {canMutate ? (
+          {canMarkReady ? (
             <Button
               onClick={() => onReady(room.id)}
               className="h-9 w-full rounded-full bg-green-600 text-sm font-medium text-white hover:bg-green-700"
@@ -235,9 +250,9 @@ function RoomCard({ room, elapsedMin, canMutate, onCallNext, onFinish, onReady, 
               <Sparkles className="size-4" />
               Tandai Ruangan Siap
             </Button>
-          ) : (
+          ) : isReceptionist ? (
             <FollowUpButton onClick={() => onFollowUp(room.id)} />
-          )}
+          ) : null}
         </div>
       )}
 
@@ -271,13 +286,205 @@ function RoomCard({ room, elapsedMin, canMutate, onCallNext, onFinish, onReady, 
   );
 }
 
+// Compact metric tile used only on the Doctor's minimalist Activity view
+// (three of these replace the four-card expandable StatCard row, which was
+// designed for a clinic-wide, multi-room summary and reads as odd/sparse
+// once there's only ever one room's worth of data behind it).
+function StatPill({ icon, label, value }) {
+  return (
+    <div className="flex flex-1 items-center gap-3 rounded-2xl border border-slate-100 bg-white px-4 py-3 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)]">
+      <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-slate-50 text-slate-400">
+        {icon}
+      </div>
+      <div className="flex flex-col">
+        <span className="text-lg font-semibold text-slate-900">{value}</span>
+        <span className="text-xs text-slate-400">{label}</span>
+      </div>
+    </div>
+  );
+}
+
+// Purpose-built, single-room Activity screen for the Doctor role — a
+// focused hero panel for their own room's live state, a simple upcoming
+// queue list, three compact metrics, and a minimal timeline instead of the
+// alternating-row log. Replaces the clinic-wide 3-room board (which is
+// still used unchanged for Receptionist/Admin) now that a doctor only ever
+// sees their own room.
+function DoctorActivityView({ room, elapsedMin, stats, log, canFinish, canMarkReady, onFinish, onReady }) {
+  if (!room) {
+    return (
+      <div className="flex flex-1 items-center justify-center">
+        <p className="text-sm text-slate-400">Tidak ada ruangan yang ditugaskan untuk Anda.</p>
+      </div>
+    );
+  }
+
+  const StatusIcon = ROOM_STATUS_ICON[room.status];
+
+  return (
+    <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6">
+      <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-0.5">
+          <p className="text-sm font-medium text-slate-400">Ruang Praktik Anda</p>
+          <h2 className="text-2xl font-semibold text-slate-900">
+            {room.id} &middot; {room.doctor}
+          </h2>
+        </div>
+        <Badge className={cn('gap-1.5 rounded-full px-3 py-1.5 text-sm', ROOM_STATUS_STYLES[room.status])}>
+          <StatusIcon className="size-4" />
+          {room.status}
+        </Badge>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.3fr_1fr]">
+        {/* Current room state — the primary focus of the screen */}
+        <div className="flex flex-col justify-center gap-8 rounded-2xl border border-slate-100 bg-white p-8 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)]">
+          {room.status === 'Occupied' && room.current ? (
+            <>
+              <div className="flex items-center gap-4">
+                <div className="flex size-14 shrink-0 items-center justify-center rounded-full bg-blue-50 text-lg font-semibold text-blue-700">
+                  {getInitials(room.current.name)}
+                </div>
+                <div className="flex flex-col">
+                  <p className="text-lg font-semibold text-slate-900">{room.current.name}</p>
+                  <p className="text-sm text-slate-500">{room.current.keluhan}</p>
+                </div>
+              </div>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between text-sm text-slate-500">
+                  <span className="inline-flex items-center gap-1.5">
+                    <Clock className="size-4" />
+                    {elapsedMin} menit berjalan
+                  </span>
+                  <span>Estimasi {room.current.estDuration} menit</span>
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                  <div
+                    className="h-full rounded-full bg-blue-500 transition-[width] duration-500"
+                    style={{ width: `${Math.min(100, (elapsedMin / room.current.estDuration) * 100)}%` }}
+                  />
+                </div>
+              </div>
+              {canFinish && (
+                <Button
+                  onClick={() => onFinish(room.id)}
+                  className="h-11 w-full rounded-xl bg-green-600 text-sm font-medium text-white hover:bg-green-700"
+                >
+                  <CheckCircle2 className="size-4" />
+                  Selesai Layani
+                </Button>
+              )}
+            </>
+          ) : room.status === 'Available' ? (
+            <div className="flex flex-col items-center gap-3 py-6 text-center">
+              <div className="flex size-14 items-center justify-center rounded-full bg-green-50 text-green-600">
+                <DoorOpen className="size-6" />
+              </div>
+              <p className="text-base font-medium text-slate-700">Ruangan siap digunakan</p>
+              <p className="max-w-xs text-sm text-slate-400">
+                Menunggu resepsionis memanggil pasien berikutnya ke ruangan Anda.
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-4 py-6 text-center">
+              <div className="flex size-14 items-center justify-center rounded-full bg-orange-50 text-orange-500">
+                <Brush className="size-6" />
+              </div>
+              <p className="text-base font-medium text-slate-700">Ruangan sedang dibersihkan</p>
+              {canMarkReady && (
+                <Button
+                  onClick={() => onReady(room.id)}
+                  className="h-11 w-full max-w-xs rounded-xl bg-green-600 text-sm font-medium text-white hover:bg-green-700"
+                >
+                  <Sparkles className="size-4" />
+                  Tandai Ruangan Siap
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Upcoming queue — plain list, no nested card chrome */}
+        <div className="flex flex-col gap-1 rounded-2xl border border-slate-100 bg-white p-6 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)]">
+          <p className="mb-3 text-sm font-semibold text-slate-900">
+            Antrian Berikutnya {room.queue.length > 0 && `(${room.queue.length})`}
+          </p>
+          {room.queue.length === 0 ? (
+            <p className="text-sm text-slate-400">Tidak ada antrian.</p>
+          ) : (
+            room.queue.map((p, i) => (
+              <div
+                key={`${p.name}-${i}`}
+                className="flex items-center justify-between gap-2 border-b border-slate-50 py-2.5 last:border-b-0"
+              >
+                <div className="flex min-w-0 flex-col">
+                  <span className="truncate text-sm font-medium text-slate-700">{p.name}</span>
+                  <span className="truncate text-xs text-slate-400">{p.keluhan}</span>
+                </div>
+                <span className="shrink-0 text-xs text-slate-400">{p.appt}</span>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-4">
+        <StatPill icon={<Users className="size-4" />} label="Pasien Menunggu" value={stats.totalWaiting} />
+        <StatPill icon={<CheckCircle2 className="size-4" />} label="Selesai Hari Ini" value={stats.finishedToday} />
+        <StatPill icon={<Timer className="size-4" />} label="Rata-rata Tunggu" value={`${stats.avgWait} min`} />
+      </div>
+
+      {/* Minimal timeline — replaces the alternating-row log table */}
+      <div className="flex flex-col gap-4 rounded-2xl border border-slate-100 bg-white p-6 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)]">
+        <p className="text-sm font-semibold text-slate-900">Aktivitas Hari Ini</p>
+        {log.length === 0 ? (
+          <p className="text-sm text-slate-400">Belum ada aktivitas hari ini.</p>
+        ) : (
+          <div className="flex flex-col">
+            {log.map((entry, i) => {
+              const meta = ACTIVITY_META[entry.action];
+              const Icon = meta.icon;
+              const isLast = i === log.length - 1;
+              return (
+                <div key={i} className="flex gap-3">
+                  <div className="flex flex-col items-center">
+                    <div
+                      className={cn(
+                        'flex size-7 shrink-0 items-center justify-center rounded-full',
+                        meta.bg,
+                        meta.color
+                      )}
+                    >
+                      <Icon className="size-3.5" />
+                    </div>
+                    {!isLast && <div className="w-px flex-1 bg-slate-100" />}
+                  </div>
+                  <div className="flex flex-1 items-center justify-between pb-5">
+                    <p className="text-sm text-slate-700">{activityDescription(entry)}</p>
+                    <span className="shrink-0 text-xs text-slate-400">{entry.time}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function Activity() {
-  const { role } = useRole();
-  // Only Doctor/Admin can actually change a room's state (call next
-  // patient, mark finished, mark ready); Receptionist can only follow up
-  // on the queue — a lightweight nudge that gets logged but never mutates
-  // room/queue state itself.
-  const canMutate = role === 'Doctor' || role === 'Admin';
+  const { role, doctorName } = useRole();
+  const isDoctor = role === 'Doctor';
+  const isReceptionist = role === 'Receptionist';
+  // Per-action permissions instead of one blanket flag — calling the next
+  // patient in is a front-desk job (Receptionist/Admin), while finishing a
+  // treatment and clearing a cleaned room back to ready are the doctor's
+  // own call (Doctor/Admin). Receptionist gets a "Follow Up" nudge instead
+  // wherever they can't act directly.
+  const canCallNext = isReceptionist || role === 'Admin';
+  const canFinish = isDoctor || role === 'Admin';
+  const canMarkReady = isDoctor || role === 'Admin';
 
   const [rooms, setRooms] = useState(ROOMS_INITIAL);
   const [log, setLog] = useState(LOG_INITIAL);
@@ -341,11 +548,19 @@ export default function Activity() {
     toast.success(`Follow up antrian ${room.id} terkirim ke ${room.doctor}`);
   }
 
+  // A doctor only has one room of their own, so both the board and its
+  // stats/log are scoped down to that room instead of the whole clinic —
+  // seeing "1/3 rooms active" or another doctor's call/finish entries next
+  // to a board that only shows your own room would be confusing.
+  // Receptionist/Admin keep the full clinic-wide view.
+  const visibleRooms = isDoctor ? rooms.filter((r) => r.doctor === doctorName) : rooms;
+  const visibleLog = isDoctor ? log.filter((entry) => entry.doctor === doctorName) : log;
+
   const stats = useMemo(() => {
-    const activeRooms = rooms.filter((r) => r.status === 'Occupied').length;
-    const totalWaiting = rooms.reduce((sum, r) => sum + r.queue.length, 0);
-    const finishedList = log.filter((entry) => entry.action === 'finished');
-    const waitList = rooms
+    const activeRooms = visibleRooms.filter((r) => r.status === 'Occupied').length;
+    const totalWaiting = visibleRooms.reduce((sum, r) => sum + r.queue.length, 0);
+    const finishedList = visibleLog.filter((entry) => entry.action === 'finished');
+    const waitList = visibleRooms
       .flatMap((r) => r.queue.map((p) => ({ room: r.id, name: p.name, waitMin: p.waitMin })))
       .sort((a, b) => b.waitMin - a.waitMin);
     const avgWait = waitList.length
@@ -359,7 +574,7 @@ export default function Activity() {
       waitList,
       avgWait,
     };
-  }, [rooms, log]);
+  }, [visibleRooms, visibleLog]);
 
   return (
     <div className="flex min-h-screen w-full bg-[#f5f6f8]">
@@ -391,6 +606,23 @@ export default function Activity() {
         </header>
 
         <main className="flex flex-1 flex-col gap-4 p-6">
+          {isDoctor ? (
+            <DoctorActivityView
+              room={visibleRooms[0]}
+              elapsedMin={
+                visibleRooms[0]?.current
+                  ? Math.max(0, Math.floor((now - visibleRooms[0].current.startedAt) / 60000))
+                  : 0
+              }
+              stats={stats}
+              log={visibleLog}
+              canFinish={canFinish}
+              canMarkReady={canMarkReady}
+              onFinish={handleFinish}
+              onReady={handleReady}
+            />
+          ) : (
+          <>
           {/* Overview stat row — same expandable StatCard format used on
               Today's Patient, so every page's summary row reads identically. */}
           <div className="flex w-full flex-col gap-3">
@@ -400,11 +632,11 @@ export default function Activity() {
               <StatCard
                 icon={<UserCheck className="size-4" />}
                 title="Ruangan Aktif"
-                count={`${stats.activeRooms}/${rooms.length}`}
+                count={`${stats.activeRooms}/${visibleRooms.length}`}
                 showDetail={showDetail}
               >
                 <div className="flex flex-col gap-1.5 overflow-y-auto">
-                  {rooms.map((room) => (
+                  {visibleRooms.map((room) => (
                     <div
                       key={room.id}
                       className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-1.5 text-xs"
@@ -489,16 +721,19 @@ export default function Activity() {
             </div>
           </div>
 
-          {/* Per-room queue board */}
+          {/* Per-room queue board — Doctor only sees their own room */}
           <div className="flex w-full items-stretch gap-4">
-            {rooms.map((room) => (
+            {visibleRooms.map((room) => (
               <RoomCard
                 key={room.id}
                 room={room}
                 elapsedMin={
                   room.current ? Math.max(0, Math.floor((now - room.current.startedAt) / 60000)) : 0
                 }
-                canMutate={canMutate}
+                canCallNext={canCallNext}
+                canFinish={canFinish}
+                canMarkReady={canMarkReady}
+                isReceptionist={isReceptionist}
                 onCallNext={handleCallNext}
                 onFinish={handleFinish}
                 onReady={handleReady}
@@ -511,10 +746,10 @@ export default function Activity() {
           <div className="flex flex-col gap-3 rounded-2xl bg-white p-4 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)]">
             <p className="text-base font-semibold text-slate-950">Log Aktivitas Hari Ini</p>
             <div className="flex flex-col">
-              {log.length === 0 ? (
+              {visibleLog.length === 0 ? (
                 <p className="py-6 text-center text-sm text-slate-400">Belum ada aktivitas hari ini.</p>
               ) : (
-                log.map((entry, i) => {
+                visibleLog.map((entry, i) => {
                   const meta = ACTIVITY_META[entry.action];
                   const Icon = meta.icon;
                   return (
@@ -536,6 +771,8 @@ export default function Activity() {
               )}
             </div>
           </div>
+          </>
+          )}
         </main>
       </div>
     </div>
