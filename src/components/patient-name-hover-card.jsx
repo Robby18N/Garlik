@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
@@ -20,24 +20,51 @@ const CATEGORY_STYLES = {
  * "Hover Tooltip" component (node 555:869). The table cell itself shows
  * the full name; the "Nickname" line in the popover shows first name only.
  *
+ * The trigger and the popover content aren't touching (there's an 8px
+ * offset between them) — closing the popover the instant the mouse
+ * leaves the trigger meant it vanished before the cursor could reach it,
+ * so hovering to actually read/interact with the popover never worked.
+ * Fix: close on a short delay, cancelled if the mouse re-enters either
+ * the trigger or the content within that window.
+ *
  * Props:
  *  - name: string (required) — patient's full/display name shown as the trigger; first name is used for the popover's Nickname line
  *  - category: 'VVIP' | 'VIP' | 'Regular' (required) — patient category shown in the popover
  */
 export function PatientNameHoverCard({ name, category }) {
   const [open, setOpen] = useState(false);
+  const closeTimer = useRef(null);
   const categoryClass = CATEGORY_STYLES[category] ?? CATEGORY_STYLES.Regular;
   const firstName = name.trim().split(/\s+/)[0];
+
+  const clearCloseTimer = () => {
+    if (closeTimer.current) {
+      clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+  };
+
+  const openNow = () => {
+    clearCloseTimer();
+    setOpen(true);
+  };
+
+  const closeSoon = () => {
+    clearCloseTimer();
+    closeTimer.current = setTimeout(() => setOpen(false), 150);
+  };
+
+  useEffect(() => clearCloseTimer, []);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <span
           className="cursor-default text-sm font-medium text-slate-700 underline decoration-dotted decoration-slate-300 underline-offset-4 hover:text-slate-900"
-          onMouseEnter={() => setOpen(true)}
-          onMouseLeave={() => setOpen(false)}
-          onFocus={() => setOpen(true)}
-          onBlur={() => setOpen(false)}
+          onMouseEnter={openNow}
+          onMouseLeave={closeSoon}
+          onFocus={openNow}
+          onBlur={closeSoon}
           tabIndex={0}
         >
           {name}
@@ -48,8 +75,8 @@ export function PatientNameHoverCard({ name, category }) {
         sideOffset={8}
         onOpenAutoFocus={(e) => e.preventDefault()}
         className="w-auto rounded-xl border border-[#e8ebed] p-4 text-[13px] shadow-[0px_1px_4px_0px_rgba(0,0,0,0.05),0px_4px_16px_-2px_rgba(0,0,0,0.1)]"
-        onMouseEnter={() => setOpen(true)}
-        onMouseLeave={() => setOpen(false)}
+        onMouseEnter={openNow}
+        onMouseLeave={closeSoon}
       >
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-2">

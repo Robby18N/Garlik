@@ -61,6 +61,25 @@ const MOCK_PATIENTS = [
   { id: 21, mr: 2, appt: '14:15', name: 'Reza Kurniawan', category: 'Regular', dokter: 'drg. SM', room: 'R1', keluhan: 'Sakit Gigi', durasi: '60 Min', status: 'Waiting 20 Min', lab: 'OK', remark: 'Pasien Kondusif' },
 ];
 
+// Tomorrow's schedule — a different set of booked patients. None of these
+// appointments have happened yet, so there is no Complete/Late/Waiting
+// status to show; the Status column renders "-" for every row instead
+// (handled in the Status cell below, keyed off `dayFilter`).
+const MOCK_PATIENTS_TOMORROW = [
+  { id: 101, mr: 2, appt: '08:00', name: 'Hendra Gunawan', category: 'Regular', dokter: 'drg. SM', room: 'R1', keluhan: 'Kontrol Kawat Gigi', durasi: '30 Min', status: null, lab: 'OK', remark: 'Jadwal kontrol rutin' },
+  { id: 102, mr: 1, appt: '08:30', name: 'Melati Suryani', category: 'VIP', dokter: 'drg. AN', room: 'R2', keluhan: 'Cabut Gigi Bungsu', durasi: '90 Min', status: null, lab: 'OK', remark: 'Pasien minta anestesi ringan' },
+  { id: 103, mr: 2, appt: '09:00', name: 'Bayu Kusnandar', category: 'Regular', dokter: 'drg. RF', room: 'R3', keluhan: 'Gigi Berlubang', durasi: '45 Min', status: null, lab: 'NOK', remark: 'Perlu rontgen dulu' },
+  { id: 104, mr: 3, appt: '09:30', name: 'Citra Dewanti', category: 'VVIP', dokter: 'drg. SM', room: 'R1', keluhan: 'Whitening', durasi: '90 Min', status: null, lab: 'OK', remark: 'Booking dari kemarin' },
+  { id: 105, mr: 2, appt: '10:00', name: 'Doni Firmansyah', category: 'Regular', dokter: 'drg. AN', room: 'R2', keluhan: 'Scaling', durasi: '45 Min', status: null, lab: 'OK', remark: 'Pasien baru' },
+  { id: 106, mr: 2, appt: '10:30', name: 'Eka Purnama', category: 'Regular', dokter: 'drg. RF', room: 'R3', keluhan: 'Sakit Gusi', durasi: '30 Min', status: null, lab: 'OK', remark: 'Pasien Kondusif' },
+  { id: 107, mr: 2, appt: '11:00', name: 'Galih Prasetyo', category: 'Regular', dokter: 'drg. SM', room: 'R1', keluhan: 'Tambal Gigi', durasi: '45 Min', status: null, lab: 'OK', remark: 'Reschedule dari minggu lalu' },
+  { id: 108, mr: 2, appt: '11:30', name: 'Herlina Wati', category: 'VIP', dokter: 'drg. AN', room: 'R2', keluhan: 'Konsultasi Behel', durasi: '30 Min', status: null, lab: 'OK', remark: 'Konsultasi pertama' },
+  { id: 109, mr: 2, appt: '13:00', name: 'Indra Gunawan', category: 'Regular', dokter: 'drg. RF', room: 'R3', keluhan: 'Gigi Ngilu', durasi: '45 Min', status: null, lab: 'OK', remark: 'Pasien Kondusif' },
+  { id: 110, mr: 2, appt: '13:30', name: 'Jasmine Anggraini', category: 'Regular', dokter: 'drg. SM', room: 'R1', keluhan: 'Karang Gigi', durasi: '45 Min', status: null, lab: 'OK', remark: 'Pasien Kondusif' },
+  { id: 111, mr: 2, appt: '14:00', name: 'Krisna Ardiansyah', category: 'Regular', dokter: 'drg. AN', room: 'R2', keluhan: 'Cabut Gigi', durasi: '60 Min', status: null, lab: 'NOK', remark: 'Perlu rontgen dulu' },
+  { id: 112, mr: 2, appt: '14:30', name: 'Lestari Handayani', category: 'Regular', dokter: 'drg. RF', room: 'R3', keluhan: 'Sakit Gigi', durasi: '60 Min', status: null, lab: 'OK', remark: 'Pasien Kondusif' },
+];
+
 // Column widths as percentages of the table, proportional to Figma node
 // 576:3192's `.Table Heading` frame widths (43/47/80/180/80/80/160/80/
 // 138/50/300 out of 1325, Action taking the remainder). Using percentages
@@ -94,10 +113,13 @@ export default function TodaysPatient() {
   const [nameSearchOpen, setNameSearchOpen] = useState(false);
   const [nameQuery, setNameQuery] = useState('');
   const [apptSortAsc, setApptSortAsc] = useState(true);
-  // Remark column is freely editable per row — seeded from the mock data,
-  // keyed by patient id so edits survive sorting/filtering.
+  // Remark column is freely editable per row — seeded from the mock data
+  // (both Today's and Tomorrow's schedules), keyed by patient id so edits
+  // survive sorting/filtering/switching days.
   const [remarks, setRemarks] = useState(() =>
-    Object.fromEntries(MOCK_PATIENTS.map((p) => [p.id, p.remark]))
+    Object.fromEntries(
+      [...MOCK_PATIENTS, ...MOCK_PATIENTS_TOMORROW].map((p) => [p.id, p.remark])
+    )
   );
 
   function handleViewPatient(patient) {
@@ -106,13 +128,14 @@ export default function TodaysPatient() {
   }
 
   const visiblePatients = useMemo(() => {
+    const source = dayFilter === 'Tomorrow' ? MOCK_PATIENTS_TOMORROW : MOCK_PATIENTS;
     const filtered = nameQuery.trim()
-      ? MOCK_PATIENTS.filter((p) => p.name.toLowerCase().includes(nameQuery.trim().toLowerCase()))
-      : MOCK_PATIENTS;
+      ? source.filter((p) => p.name.toLowerCase().includes(nameQuery.trim().toLowerCase()))
+      : source;
     return [...filtered].sort((a, b) =>
       apptSortAsc ? a.appt.localeCompare(b.appt) : b.appt.localeCompare(a.appt)
     );
-  }, [nameQuery, apptSortAsc]);
+  }, [dayFilter, nameQuery, apptSortAsc]);
 
   return (
     <div className="flex min-h-screen w-full bg-[#f5f6f8]">
@@ -204,8 +227,8 @@ export default function TodaysPatient() {
               <Table className="table-fixed">
                 <TableHeader>
                   <TableRow className="border-transparent hover:bg-transparent">
-                    <TableHead className={cn(HEADER_CLASS, COL_WIDTH.no, 'text-center')}>No</TableHead>
-                    <TableHead className={cn(HEADER_CLASS, COL_WIDTH.mr, 'text-center')}>MR</TableHead>
+                    <TableHead className={cn(HEADER_CLASS, COL_WIDTH.no, 'text-left')}>No</TableHead>
+                    <TableHead className={cn(HEADER_CLASS, COL_WIDTH.mr, 'text-left')}>MR</TableHead>
                     <TableHead className={cn(HEADER_CLASS, COL_WIDTH.appt)}>
                       <button
                         type="button"
@@ -270,7 +293,7 @@ export default function TodaysPatient() {
                     <TableHead className={cn(HEADER_CLASS, COL_WIDTH.status)}>Status</TableHead>
                     <TableHead className={cn(HEADER_CLASS, COL_WIDTH.lab)}>Lab</TableHead>
                     <TableHead className={cn(HEADER_CLASS, COL_WIDTH.remark)}>Remark</TableHead>
-                    <TableHead className={cn(HEADER_CLASS, COL_WIDTH.action, 'text-center')}>Action</TableHead>
+                    <TableHead className={cn(HEADER_CLASS, COL_WIDTH.action, 'text-left')}>Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -279,9 +302,9 @@ export default function TodaysPatient() {
                       key={patient.id}
                       className={cn('border-b border-[#e2e8f0]', index % 2 === 1 && 'bg-[#f8fafc]')}
                     >
-                      <TableCell className="!align-top py-3 text-center text-[#334155]">{index + 1}</TableCell>
-                      <TableCell className="!align-top py-3">
-                        <div className="flex items-center justify-center">
+                      <TableCell className="!align-top py-3 text-left text-[#334155]">{index + 1}</TableCell>
+                      <TableCell className="!align-top py-3 text-left">
+                        <div className="flex items-center justify-start">
                           <MrCheckIcon variant={patient.mr} />
                         </div>
                       </TableCell>
@@ -296,9 +319,13 @@ export default function TodaysPatient() {
                       </TableCell>
                       <TableCell className="!align-top py-3 text-left text-[#334155]">{patient.durasi}</TableCell>
                       <TableCell className="!align-top py-3 text-left">
-                        <Badge className={cn('rounded-full px-2.5 py-1', STATUS_STYLES[patient.status])}>
-                          {patient.status}
-                        </Badge>
+                        {patient.status ? (
+                          <Badge className={cn('rounded-full px-2.5 py-1', STATUS_STYLES[patient.status])}>
+                            {patient.status}
+                          </Badge>
+                        ) : (
+                          <span className="text-[#94a3b8]">-</span>
+                        )}
                       </TableCell>
                       <TableCell className="!align-top py-3 text-left text-[#334155]">{patient.lab}</TableCell>
                       <TableCell className="!align-top py-3 text-left">
@@ -326,8 +353,8 @@ export default function TodaysPatient() {
                           className="block w-full resize-none overflow-hidden rounded-md border border-transparent bg-transparent p-1 text-left text-sm text-[#334155] outline-none placeholder:text-slate-400 hover:border-slate-200 focus:border-slate-300 focus:bg-white focus:shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)]"
                         />
                       </TableCell>
-                      <TableCell className="!align-top py-3">
-                        <div className="flex items-center justify-end gap-2">
+                      <TableCell className="!align-top py-3 text-left">
+                        <div className="flex items-center justify-start gap-2">
                           <button
                             type="button"
                             data-testid={`view-patient-${index}`}
