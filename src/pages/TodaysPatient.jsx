@@ -61,20 +61,25 @@ const MOCK_PATIENTS = [
   { id: 21, mr: 2, appt: '14:15', name: 'Reza Kurniawan', category: 'Regular', dokter: 'drg. SM', room: 'R1', keluhan: 'Sakit Gigi', durasi: '60 Min', status: 'Waiting 20 Min', lab: 'OK', remark: 'Pasien Kondusif' },
 ];
 
-// Fixed column widths matching Figma node 576:3192's `.Table Heading` frame
-// widths exactly (table total 1325px, Action takes the remainder).
+// Column widths as percentages of the table, proportional to Figma node
+// 576:3192's `.Table Heading` frame widths (43/47/80/180/80/80/160/80/
+// 138/50/300 out of 1325, Action taking the remainder). Using percentages
+// instead of hard pixel widths means the table always scales to fit its
+// container — no column (in particular Action, at the far right) ever
+// gets cut off regardless of viewport width.
 const COL_WIDTH = {
-  no: 'w-[43px]',
-  mr: 'w-[47px]',
-  appt: 'w-[80px]',
-  name: 'w-[180px]',
-  dokter: 'w-[80px]',
-  room: 'w-[80px]',
-  keluhan: 'w-[160px]',
-  durasi: 'w-[80px]',
-  status: 'w-[138px]',
-  lab: 'w-[50px]',
-  remark: 'w-[300px]',
+  no: 'w-[3.25%]',
+  mr: 'w-[3.55%]',
+  appt: 'w-[6.04%]',
+  name: 'w-[13.58%]',
+  dokter: 'w-[6.04%]',
+  room: 'w-[6.04%]',
+  keluhan: 'w-[12.08%]',
+  durasi: 'w-[6.04%]',
+  status: 'w-[10.42%]',
+  lab: 'w-[3.77%]',
+  remark: 'w-[22.64%]',
+  action: 'w-[6.57%]',
 };
 
 const HEADER_CLASS =
@@ -163,7 +168,7 @@ export default function TodaysPatient() {
                   <Input
                     readOnly
                     placeholder="Cari Pasien / ID Patient / Nomor Telp"
-                    className="h-10 cursor-pointer rounded-3xl border border-[#e2e8f0] bg-white pl-10 pr-4 text-sm shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)]"
+                    className="h-10 cursor-pointer rounded-3xl border border-solid border-[#e2e8f0] bg-white pl-10 pr-4 text-sm shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)]"
                   />
                 </div>
 
@@ -265,7 +270,7 @@ export default function TodaysPatient() {
                     <TableHead className={cn(HEADER_CLASS, COL_WIDTH.status)}>Status</TableHead>
                     <TableHead className={cn(HEADER_CLASS, COL_WIDTH.lab)}>Lab</TableHead>
                     <TableHead className={cn(HEADER_CLASS, COL_WIDTH.remark)}>Remark</TableHead>
-                    <TableHead className={cn(HEADER_CLASS, 'text-center')}>Action</TableHead>
+                    <TableHead className={cn(HEADER_CLASS, COL_WIDTH.action, 'text-center')}>Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -274,41 +279,54 @@ export default function TodaysPatient() {
                       key={patient.id}
                       className={cn('border-b border-[#e2e8f0]', index % 2 === 1 && 'bg-[#f8fafc]')}
                     >
-                      <TableCell className="h-16 text-center text-[#334155]">{index + 1}</TableCell>
-                      <TableCell className="h-16">
+                      <TableCell className="!align-top py-3 text-center text-[#334155]">{index + 1}</TableCell>
+                      <TableCell className="!align-top py-3">
                         <div className="flex items-center justify-center">
                           <MrCheckIcon variant={patient.mr} />
                         </div>
                       </TableCell>
-                      <TableCell className="h-16 text-[#334155]">{patient.appt}</TableCell>
-                      <TableCell className="h-16">
+                      <TableCell className="!align-top py-3 text-left text-[#334155]">{patient.appt}</TableCell>
+                      <TableCell className="!align-top py-3 text-left">
                         <PatientNameHoverCard name={patient.name} category={patient.category} />
                       </TableCell>
-                      <TableCell className="h-16 text-[#334155]">{patient.dokter}</TableCell>
-                      <TableCell className="h-16 text-[#334155]">{patient.room}</TableCell>
-                      <TableCell className="h-16 whitespace-normal text-[#334155]">
+                      <TableCell className="!align-top py-3 text-left text-[#334155]">{patient.dokter}</TableCell>
+                      <TableCell className="!align-top py-3 text-left text-[#334155]">{patient.room}</TableCell>
+                      <TableCell className="!align-top py-3 whitespace-normal text-left text-[#334155]">
                         {patient.keluhan}
                       </TableCell>
-                      <TableCell className="h-16 text-[#334155]">{patient.durasi}</TableCell>
-                      <TableCell className="h-16">
+                      <TableCell className="!align-top py-3 text-left text-[#334155]">{patient.durasi}</TableCell>
+                      <TableCell className="!align-top py-3 text-left">
                         <Badge className={cn('rounded-full px-2.5 py-1', STATUS_STYLES[patient.status])}>
                           {patient.status}
                         </Badge>
                       </TableCell>
-                      <TableCell className="h-16 text-[#334155]">{patient.lab}</TableCell>
-                      <TableCell className="h-16 max-w-[280px]">
+                      <TableCell className="!align-top py-3 text-left text-[#334155]">{patient.lab}</TableCell>
+                      <TableCell className="!align-top py-3 text-left">
+                        {/* Free-text, auto-growing remark — height follows the number
+                            of lines/paragraphs typed, and the row height (shared by
+                            every cell above, all pinned to align-top) grows with it. */}
                         <textarea
+                          ref={(el) => {
+                            if (el) {
+                              el.style.height = 'auto';
+                              el.style.height = `${el.scrollHeight}px`;
+                            }
+                          }}
                           value={remarks[patient.id] ?? ''}
                           onChange={(e) =>
                             setRemarks((prev) => ({ ...prev, [patient.id]: e.target.value }))
                           }
-                          rows={2}
+                          onInput={(e) => {
+                            e.target.style.height = 'auto';
+                            e.target.style.height = `${e.target.scrollHeight}px`;
+                          }}
+                          rows={1}
                           placeholder="Tulis remark..."
                           aria-label={`Remark for ${patient.name}`}
-                          className="w-full resize-none rounded-md border border-transparent bg-transparent p-1 text-sm text-[#334155] outline-none placeholder:text-slate-400 hover:border-slate-200 focus:border-slate-300 focus:bg-white focus:shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)]"
+                          className="block w-full resize-none overflow-hidden rounded-md border border-transparent bg-transparent p-1 text-left text-sm text-[#334155] outline-none placeholder:text-slate-400 hover:border-slate-200 focus:border-slate-300 focus:bg-white focus:shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)]"
                         />
                       </TableCell>
-                      <TableCell className="h-16">
+                      <TableCell className="!align-top py-3">
                         <div className="flex items-center justify-end gap-2">
                           <button
                             type="button"
