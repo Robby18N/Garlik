@@ -16,16 +16,18 @@ const CATEGORY_STYLES = {
 /**
  * Hoverable patient name used in the "Nama"/"Patient Name" table column.
  * On hover (or focus, for keyboard/touch users) it shows a small popover
- * with the patient's nickname/name and category badge, matching the
- * Figma "Hover Tooltip" component (node 555:869).
+ * with the patient's nickname and category badge, matching the Figma
+ * "Hover Tooltip" component (node 555:869). The table cell itself shows
+ * the full name; the "Nickname" line in the popover shows first name only.
  *
  * Props:
- *  - name: string (required) — patient's full/display name shown as the trigger and in the popover
+ *  - name: string (required) — patient's full/display name shown as the trigger; first name is used for the popover's Nickname line
  *  - category: 'VVIP' | 'VIP' | 'Regular' (required) — patient category shown in the popover
  */
 export function PatientNameHoverCard({ name, category }) {
   const [open, setOpen] = useState(false);
   const categoryClass = CATEGORY_STYLES[category] ?? CATEGORY_STYLES.Regular;
+  const firstName = name.trim().split(/\s+/)[0];
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -52,7 +54,7 @@ export function PatientNameHoverCard({ name, category }) {
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-2">
             <p className="w-20 shrink-0 font-normal text-[#737d8c]">Nickname</p>
-            <p className="font-medium text-[#334155]">{`:  ${name}`}</p>
+            <p className="font-medium text-[#334155]">{`:  ${firstName}`}</p>
           </div>
           <div className="flex items-center gap-2">
             <p className="w-20 shrink-0 font-normal text-[#737d8c]">Category</p>
