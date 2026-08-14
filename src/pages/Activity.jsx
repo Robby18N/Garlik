@@ -11,7 +11,9 @@ import {
   Clock,
   Users,
   Timer,
+  Megaphone,
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -19,6 +21,7 @@ import AppSidebar from '@/components/app-sidebar';
 import AccountMenu from '@/components/account-menu';
 import { StatCard, DetailHighlightToggle } from '@/components/stat-card';
 import { cn } from '@/lib/utils';
+import { useRole } from '@/context/role-context';
 
 const ROOM_STATUS_DOT = { Available: 'bg-green-500', Occupied: 'bg-blue-500', Cleaning: 'bg-orange-500' };
 
@@ -93,11 +96,13 @@ const ACTIVITY_META = {
   called: { icon: PhoneCall, color: 'text-[#3b82f6]', bg: 'bg-[rgba(59,130,246,0.08)]' },
   finished: { icon: CheckCircle2, color: 'text-[#16a34a]', bg: 'bg-[rgba(34,197,94,0.08)]' },
   ready: { icon: Sparkles, color: 'text-[#f97316]', bg: 'bg-[rgba(249,115,22,0.08)]' },
+  followup: { icon: Megaphone, color: 'text-[#0ea5e9]', bg: 'bg-[rgba(14,165,233,0.08)]' },
 };
 
 function activityDescription(entry) {
   if (entry.action === 'called') return `Memanggil ${entry.patient} ke ${entry.room}`;
   if (entry.action === 'finished') return `Selesai melayani ${entry.patient} di ${entry.room}`;
+  if (entry.action === 'followup') return `Resepsionis follow up antrian di ${entry.room}`;
   return `${entry.room} siap digunakan`;
 }
 
@@ -120,7 +125,25 @@ function nowTimeLabel() {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
-function RoomCard({ room, elapsedMin, onCallNext, onFinish, onReady }) {
+// Read-only "Follow Up" button shown to Receptionist in place of the real
+// mutating action — lets them nudge/check on a room's progress without
+// actually changing its status, since only Doctor/Admin can do that.
+function FollowUpButton({ onClick, disabled }) {
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      onClick={onClick}
+      disabled={disabled}
+      className="h-9 w-full rounded-full border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50"
+    >
+      <Megaphone className="size-4" />
+      Follow Up
+    </Button>
+  );
+}
+
+function RoomCard({ room, elapsedMin, canMutate, onCallNext, onFinish, onReady, onFollowUp }) {
   const StatusIcon = ROOM_STATUS_ICON[room.status];
   const upcoming = room.queue.slice(0, room.status === 'Available' ? 2 : 3);
   const overflow = room.queue.length - upcoming.length;
@@ -164,13 +187,17 @@ function RoomCard({ room, elapsedMin, onCallNext, onFinish, onReady }) {
               />
             </div>
           </div>
-          <Button
-            onClick={() => onFinish(room.id)}
-            className="h-9 w-full rounded-full bg-green-600 text-sm font-medium text-white hover:bg-green-700"
-          >
-            <CheckCircle2 className="size-4" />
-            Selesai Layani
-          </Button>
+          {canMutate ? (
+            <Button
+              onClick={() => onFinish(room.id)}
+              className="h-9 w-full rounded-full bg-green-600 text-sm font-medium text-white hover:bg-green-700"
+            >
+              <CheckCircle2 className="size-4" />
+              Selesai Layani
+            </Button>
+          ) : (
+            <FollowUpButton onClick={() => onFollowUp(room.id)} />
+          )}
         </div>
       )}
 
@@ -179,14 +206,18 @@ function RoomCard({ room, elapsedMin, onCallNext, onFinish, onReady }) {
           <p className="text-xs font-medium text-slate-500">
             {room.queue.length > 0 ? 'Ruangan siap — antrian menunggu' : 'Ruangan siap, belum ada antrian'}
           </p>
-          <Button
-            onClick={() => onCallNext(room.id)}
-            disabled={room.queue.length === 0}
-            className="h-9 w-full rounded-full bg-green-600 text-sm font-medium text-white hover:bg-green-700"
-          >
-            <PhoneCall className="size-4" />
-            Call Next Patient
-          </Button>
+          {canMutate ? (
+            <Button
+              onClick={() => onCallNext(room.id)}
+              disabled={room.queue.length === 0}
+              className="h-9 w-full rounded-full bg-green-600 text-sm font-medium text-white hover:bg-green-700"
+            >
+              <PhoneCall className="size-4" />
+              Call Next Patient
+            </Button>
+          ) : (
+            <FollowUpButton onClick={() => onFollowUp(room.id)} disabled={room.queue.length === 0} />
+          )}
         </div>
       )}
 
@@ -196,13 +227,17 @@ function RoomCard({ room, elapsedMin, onCallNext, onFinish, onReady }) {
             <Brush className="size-3.5" />
             Sedang dibersihkan
           </p>
-          <Button
-            onClick={() => onReady(room.id)}
-            className="h-9 w-full rounded-full bg-green-600 text-sm font-medium text-white hover:bg-green-700"
-          >
-            <Sparkles className="size-4" />
-            Tandai Ruangan Siap
-          </Button>
+          {canMutate ? (
+            <Button
+              onClick={() => onReady(room.id)}
+              className="h-9 w-full rounded-full bg-green-600 text-sm font-medium text-white hover:bg-green-700"
+            >
+              <Sparkles className="size-4" />
+              Tandai Ruangan Siap
+            </Button>
+          ) : (
+            <FollowUpButton onClick={() => onFollowUp(room.id)} />
+          )}
         </div>
       )}
 
@@ -237,6 +272,13 @@ function RoomCard({ room, elapsedMin, onCallNext, onFinish, onReady }) {
 }
 
 export default function Activity() {
+  const { role } = useRole();
+  // Only Doctor/Admin can actually change a room's state (call next
+  // patient, mark finished, mark ready); Receptionist can only follow up
+  // on the queue — a lightweight nudge that gets logged but never mutates
+  // room/queue state itself.
+  const canMutate = role === 'Doctor' || role === 'Admin';
+
   const [rooms, setRooms] = useState(ROOMS_INITIAL);
   const [log, setLog] = useState(LOG_INITIAL);
   const [showDetail, setShowDetail] = useState(false);
@@ -287,6 +329,16 @@ export default function Activity() {
         return { ...room, status: 'Available' };
       })
     );
+  }
+
+  // Receptionist's equivalent of the Doctor-only actions above — doesn't
+  // touch room/queue state at all, just logs the nudge and confirms it
+  // with a toast so it's clear the follow-up went through.
+  function handleFollowUp(roomId) {
+    const room = rooms.find((r) => r.id === roomId);
+    if (!room) return;
+    pushLog({ action: 'followup', room: room.id, doctor: room.doctor });
+    toast.success(`Follow up antrian ${room.id} terkirim ke ${room.doctor}`);
   }
 
   const stats = useMemo(() => {
@@ -446,9 +498,11 @@ export default function Activity() {
                 elapsedMin={
                   room.current ? Math.max(0, Math.floor((now - room.current.startedAt) / 60000)) : 0
                 }
+                canMutate={canMutate}
                 onCallNext={handleCallNext}
                 onFinish={handleFinish}
                 onReady={handleReady}
+                onFollowUp={handleFollowUp}
               />
             ))}
           </div>

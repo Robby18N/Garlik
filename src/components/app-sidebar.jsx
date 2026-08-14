@@ -50,15 +50,17 @@ const NAV_ITEMS = [
 // Labs, Wallet, Reports, Clinical, and Settings are all out of scope for now.
 // Doctor is scoped to their own clinical workflow: Today's Patient (view +
 // status/remark only, no register/appointment — enforced in the page
-// itself), Records, Activity (their own room/queue), plus Labs and
-// Database as reference views. Billing, Reminders, Screening, Wallet,
-// Reports and Settings stay out of scope — those are front-desk/admin
-// concerns, not a doctor's.
+// itself), Records, Activity (their own room/queue — mutating actions there
+// are Doctor/Admin-only, enforced in the page itself), plus Database as a
+// reference view. Labs isn't part of a doctor's own workflow, so it's left
+// off their rail. Billing, Reminders, Screening, Wallet, Reports and
+// Settings stay out of scope — those are front-desk/admin concerns, not a
+// doctor's.
 // Admin isn't scoped yet beyond "full access" — narrow this as that role
 // gets defined.
 const ROLE_ACCESS = {
   Receptionist: ['grid', 'patients', 'screening', 'records', 'activity', 'billing', 'reminders'],
-  Doctor: ['grid', 'patients', 'records', 'activity', 'labs', 'database'],
+  Doctor: ['grid', 'patients', 'records', 'activity', 'database'],
   Admin: NAV_ITEMS.map((item) => item.key),
 };
 
