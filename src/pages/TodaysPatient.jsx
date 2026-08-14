@@ -339,6 +339,14 @@ export default function TodaysPatient() {
     }));
   }
 
+  // Every patient registered at runtime (via "New Registration", with or
+  // without an appointment attached), kept as its own small directory so
+  // the "+ Appointment" dialog can find them again later — booking a
+  // second/future appointment for someone shouldn't require re-running
+  // registration just because they aren't in the dialog's original seeded
+  // roster. Keyed by id to avoid double-adding the same patient twice.
+  const [registeredPatients, setRegisteredPatients] = useState([]);
+
   // Adds a freshly registered/booked patient straight into the table —
   // used by both the "New Registration" flow (arrives via router state
   // after navigating back from /registration) and the standalone "+
@@ -353,6 +361,7 @@ export default function TodaysPatient() {
       setTodayPatients((prev) => [withId, ...prev]);
     }
     setRemarkThreads((prev) => ({ ...prev, [withId.id]: [] }));
+    return withId;
   }
 
   // Registration navigates back here with the newly created row in router
@@ -362,7 +371,21 @@ export default function TodaysPatient() {
   useEffect(() => {
     const incoming = location.state?.newPatient;
     if (!incoming) return;
-    addPatientRow(incoming, location.state?.bucket ?? 'today');
+    const added = addPatientRow(incoming, location.state?.bucket ?? 'today');
+    setRegisteredPatients((prev) =>
+      prev.some((p) => p.id === added.id)
+        ? prev
+        : [
+            ...prev,
+            {
+              id: added.id,
+              name: added.name,
+              mrn: `P-${String(added.id).padStart(4, '0')}`,
+              phone: added.phone,
+              category: added.category || 'Regular',
+            },
+          ]
+    );
     toast.success(`${incoming.name} ditambahkan ke ${location.state?.bucket === 'tomorrow' ? "Tomorrow's" : "Today's"} Patient`);
     navigate(location.pathname, { replace: true, state: {} });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -854,6 +877,7 @@ export default function TodaysPatient() {
             open={appointmentDialogOpen}
             onOpenChange={setAppointmentDialogOpen}
             onBooked={addPatientRow}
+            extraPatients={registeredPatients}
           />
           <SettingRoomLabDialog
             open={roomLabSettingOpen}

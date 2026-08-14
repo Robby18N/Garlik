@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, X, UserPlus, CalendarPlus, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
@@ -52,22 +52,33 @@ const initialAppointment = {
  * 2 captures the appointment details (doctor/room/keluhan/duration/date/
  * time), matching the same fields Today's Patient's table itself displays.
  */
-export default function MakeAppointmentDialog({ open, onOpenChange, onBooked }) {
+export default function MakeAppointmentDialog({ open, onOpenChange, onBooked, extraPatients = [] }) {
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [query, setQuery] = useState('');
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [appointment, setAppointment] = useState(initialAppointment);
 
+  // Patients registered at runtime (via "New Registration") aren't in this
+  // dialog's own seeded roster, but they're just as bookable — merge them
+  // in so booking a follow-up appointment for someone registered five
+  // minutes ago doesn't require registering them all over again. New ones
+  // are searched first since they're the most likely thing a receptionist
+  // is looking for right after registering someone.
+  const allPatients = useMemo(
+    () => [...extraPatients, ...REGISTERED_PATIENTS],
+    [extraPatients]
+  );
+
   const trimmed = query.trim().toLowerCase();
   const results = trimmed
-    ? REGISTERED_PATIENTS.filter(
+    ? allPatients.filter(
         (p) =>
           p.name.toLowerCase().includes(trimmed) ||
           p.mrn.toLowerCase().includes(trimmed) ||
           p.phone.replace(/-/g, '').includes(trimmed.replace(/-/g, ''))
       )
-    : REGISTERED_PATIENTS;
+    : allPatients;
 
   function resetState() {
     setStep(0);
