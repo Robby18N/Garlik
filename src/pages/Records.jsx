@@ -23,6 +23,7 @@ import { StatCard, DetailHighlightToggle } from '@/components/stat-card';
 import PatientNameHoverCard from '@/components/patient-name-hover-card';
 import PatientDetailSheet from '@/components/patient-detail-sheet';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 const CATEGORY_DOT = { VVIP: 'bg-amber-500', VIP: 'bg-green-500', Regular: 'bg-slate-400' };
 
@@ -32,7 +33,7 @@ const CATEGORY_DOT = { VVIP: 'bg-amber-500', VIP: 'bg-green-500', Regular: 'bg-s
 // date, visit history (with payment status per visit for Billing context),
 // basic medical background (allergies/conditions, read-only here), and
 // per-visit clinical notes gated to the Doctor role in PatientDetailSheet.
-const RECORDS_PATIENTS = [
+const RECORDS_PATIENTS_INITIAL = [
   {
     id: 1, mrn: 'P-0001', name: 'Agung Wijaya Kusuma', category: 'VIP', gender: 'Laki-laki', age: 34,
     phone: '0813-2037-6091', address: 'Jl. Kemang Raya No. 12, Jakarta Selatan',
@@ -240,22 +241,42 @@ const COL_WIDTH = {
 const HEADER_CLASS = 'h-auto whitespace-nowrap bg-[#f0fdf4] px-3 py-4 font-bold text-[#15803d]';
 
 export default function Records() {
+  const [patients, setPatients] = useState(RECORDS_PATIENTS_INITIAL);
   const [query, setQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('Semua');
   const [sortBy, setSortBy] = useState('recent');
-  const [selectedPatient, setSelectedPatient] = useState(null);
+  const [selectedPatientId, setSelectedPatientId] = useState(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
 
+  const selectedPatient = patients.find((p) => p.id === selectedPatientId) ?? null;
+
   function handleViewPatient(patient) {
-    setSelectedPatient(patient);
+    setSelectedPatientId(patient.id);
     setDetailOpen(true);
+  }
+
+  // Lets a Doctor append a new clinical note (diagnosis + prescription) to
+  // a patient's visit history directly from the Clinical tab — the tab was
+  // previously read-only, which meant "Rekam Medis" could show past visits
+  // but a doctor had no way to actually record today's. New entries are
+  // unshifted to the front so the most recent note always shows first,
+  // matching how visitHistory is already ordered everywhere else.
+  function handleAddClinicalNote(patientId, note) {
+    setPatients((prev) =>
+      prev.map((p) =>
+        p.id === patientId
+          ? { ...p, visitHistory: [note, ...(p.visitHistory ?? [])], lastVisit: note.date, totalVisits: p.totalVisits + 1 }
+          : p
+      )
+    );
+    toast.success('Catatan klinis berhasil disimpan');
   }
 
   const visiblePatients = useMemo(() => {
     const trimmed = query.trim().toLowerCase();
 
-    let result = RECORDS_PATIENTS.filter((p) => {
+    let result = patients.filter((p) => {
       const matchesQuery =
         !trimmed ||
         p.name.toLowerCase().includes(trimmed) ||
@@ -272,25 +293,25 @@ export default function Records() {
     });
 
     return result;
-  }, [query, categoryFilter, sortBy]);
+  }, [patients, query, categoryFilter, sortBy]);
 
   const stats = useMemo(() => {
-    const total = RECORDS_PATIENTS.length;
+    const total = patients.length;
     const categoryBreakdown = ['VVIP', 'VIP', 'Regular'].map((category) => ({
       category,
-      value: RECORDS_PATIENTS.filter((p) => p.category === category).length,
+      value: patients.filter((p) => p.category === category).length,
     }));
-    const priorityList = RECORDS_PATIENTS.filter((p) => p.category !== 'Regular').sort(
+    const priorityList = patients.filter((p) => p.category !== 'Regular').sort(
       (a, b) => parseDisplayDate(b.registeredSince) - parseDisplayDate(a.registeredSince)
     );
-    const newThisMonthList = RECORDS_PATIENTS.filter((p) => {
+    const newThisMonthList = patients.filter((p) => {
       const d = new Date(p.registeredSince);
       return d.getFullYear() === 2026 && d.getMonth() === 7; // August 2026
     });
     const avgVisits = total
-      ? (RECORDS_PATIENTS.reduce((sum, p) => sum + p.totalVisits, 0) / total).toFixed(1)
+      ? (patients.reduce((sum, p) => sum + p.totalVisits, 0) / total).toFixed(1)
       : '0';
-    const topVisits = [...RECORDS_PATIENTS].sort((a, b) => b.totalVisits - a.totalVisits).slice(0, 5);
+    const topVisits = [...patients].sort((a, b) => b.totalVisits - a.totalVisits).slice(0, 5);
     return {
       total,
       priority: priorityList.length,
@@ -301,7 +322,7 @@ export default function Records() {
       avgVisits,
       topVisits,
     };
-  }, []);
+  }, [patients]);
 
   return (
     <div className="flex min-h-screen w-full bg-[#f5f6f8]">
@@ -432,7 +453,7 @@ export default function Records() {
             {/* Toolbar */}
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-base font-semibold text-slate-950">
-                Showing {visiblePatients.length} of {RECORDS_PATIENTS.length} entries
+                Showing {visiblePatients.length} of {patients.length} entries
               </p>
 
               <div className="flex flex-wrap items-center gap-3">
@@ -553,7 +574,12 @@ export default function Records() {
             </div>
           </div>
 
-          <PatientDetailSheet patient={selectedPatient} open={detailOpen} onOpenChange={setDetailOpen} />
+          <PatientDetailSheet
+            patient={selectedPatient}
+            open={detailOpen}
+            onOpenChange={setDetailOpen}
+            onAddClinicalNote={handleAddClinicalNote}
+          />
         </main>
       </div>
     </div>

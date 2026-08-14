@@ -20,6 +20,7 @@ import { Badge } from '@/components/ui/badge';
 import AppSidebar from '@/components/app-sidebar';
 import AccountMenu from '@/components/account-menu';
 import { StatCard, DetailHighlightToggle } from '@/components/stat-card';
+import StatPill from '@/components/stat-pill';
 import { cn } from '@/lib/utils';
 import { useRole } from '@/context/role-context';
 
@@ -281,24 +282,6 @@ function RoomCard({
             )}
           </div>
         )}
-      </div>
-    </div>
-  );
-}
-
-// Compact metric tile used only on the Doctor's minimalist Activity view
-// (three of these replace the four-card expandable StatCard row, which was
-// designed for a clinic-wide, multi-room summary and reads as odd/sparse
-// once there's only ever one room's worth of data behind it).
-function StatPill({ icon, label, value }) {
-  return (
-    <div className="flex flex-1 items-center gap-3 rounded-2xl border border-slate-100 bg-white px-4 py-3 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)]">
-      <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-slate-50 text-slate-400">
-        {icon}
-      </div>
-      <div className="flex flex-col">
-        <span className="text-lg font-semibold text-slate-900">{value}</span>
-        <span className="text-xs text-slate-400">{label}</span>
       </div>
     </div>
   );

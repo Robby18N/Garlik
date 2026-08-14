@@ -10,6 +10,9 @@ import Records from '@/pages/Records';
 import Activity from '@/pages/Activity';
 import Billing from '@/pages/Billing';
 import Reminders from '@/pages/Reminders';
+import Dashboard from '@/pages/Dashboard';
+import Schedule from '@/pages/Schedule';
+import Prescription from '@/pages/Prescription';
 import PageTransition from '@/components/page-transition';
 import { RoleProvider, useRole } from '@/context/role-context';
 import { PatientStatusProvider } from '@/context/patient-status-context';
@@ -100,6 +103,36 @@ function AnimatedRoutes() {
             <PageTransition>
               <RequireAuth>
                 <Reminders />
+              </RequireAuth>
+            </PageTransition>
+          }
+        />
+        <Route
+          path="/dashboard"
+          element={
+            <PageTransition>
+              <RequireAuth>
+                <Dashboard />
+              </RequireAuth>
+            </PageTransition>
+          }
+        />
+        <Route
+          path="/schedule"
+          element={
+            <PageTransition>
+              <RequireAuth>
+                <Schedule />
+              </RequireAuth>
+            </PageTransition>
+          }
+        />
+        <Route
+          path="/resep"
+          element={
+            <PageTransition>
+              <RequireAuth>
+                <Prescription />
               </RequireAuth>
             </PageTransition>
           }
