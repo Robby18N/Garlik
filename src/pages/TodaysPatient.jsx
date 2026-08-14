@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Moon, Bell, Search, Plus, Share2, Eye, Pencil, ArrowUpDown, X } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
@@ -20,7 +20,7 @@ import AppSidebar from '@/components/app-sidebar';
 import SummaryCards from '@/components/summary-cards';
 import PatientNameHoverCard from '@/components/patient-name-hover-card';
 import PatientDetailSheet from '@/components/patient-detail-sheet';
-import SearchPatientDialog from '@/components/search-patient-dialog';
+import PatientNotFoundDialog from '@/components/patient-not-found-dialog';
 import MrCheckIcon from '@/components/mr-check-icon';
 import { cn } from '@/lib/utils';
 
@@ -38,27 +38,27 @@ const STATUS_STYLES = {
 // double-check, 3 = triple/wave check) matching node 583:4809 —
 // distribution mirrors the asset frequency seen across the 21 rows.
 const MOCK_PATIENTS = [
-  { id: 1, mr: 1, appt: '08:30', name: 'Agung Wijaya Kusuma', category: 'VIP', dokter: 'drg. SM', room: 'R1', keluhan: 'Gigi Ngilu / Sensitive', durasi: '45 Min', status: 'Complete', lab: 'OK', remark: 'Pasien sudah mengeluh ingin segera di treatment' },
-  { id: 2, mr: 2, appt: '08:45', name: 'Siti Rahmawati', category: 'Regular', dokter: 'drg. AN', room: 'R2', keluhan: 'Gigi Berlubang', durasi: '60 Min', status: 'Waiting 10 Min', lab: 'OK', remark: 'Pasien Kondusif' },
-  { id: 3, mr: 3, appt: '09:00', name: 'Budi Santoso', category: 'Regular', dokter: 'drg. SM', room: 'R1', keluhan: 'Scaling', durasi: '45 Min', status: 'Late', lab: 'NOK', remark: 'Pasien Telat Datang' },
-  { id: 4, mr: 2, appt: '09:15', name: 'Dewi Lestari', category: 'VVIP', dokter: 'drg. RF', room: 'R3', keluhan: 'Sakit Gigi', durasi: '60 Min', status: 'Cancel', lab: 'NOK', remark: 'Pasien Kondusif' },
-  { id: 5, mr: 2, appt: '09:30', name: 'Andi Pratama', category: 'Regular', dokter: 'drg. AN', room: 'R2', keluhan: 'Tambal Gigi', durasi: '45 Min', status: 'Waiting 10 Min', lab: 'OK', remark: 'Waktu tunggu meningkat, berpotensi menghambat antrian' },
-  { id: 6, mr: 2, appt: '09:45', name: 'Rina Marlina', category: 'VIP', dokter: 'drg. SM', room: 'R1', keluhan: 'Gigi Sensitif', durasi: '30 Min', status: 'Waiting 20 Min', lab: 'OK', remark: 'Proses berjalan sesuai estimasi, antrian kondusif' },
-  { id: 7, mr: 3, appt: '10:00', name: 'Fajar Hidayat', category: 'Regular', dokter: 'drg. RF', room: 'R3', keluhan: 'Cabut Gigi', durasi: '60 Min', status: 'Waiting 10 Min', lab: 'OK', remark: 'Pasien belum dipanggil, antrian mulai padat' },
-  { id: 8, mr: 2, appt: '10:15', name: 'Nur Aisyah', category: 'Regular', dokter: 'drg. AN', room: 'R2', keluhan: 'Karang Gigi', durasi: '45 Min', status: 'Waiting 20 Min', lab: 'OK', remark: 'Pasien Kondusif' },
-  { id: 9, mr: 2, appt: '10:30', name: 'Dimas Saputra', category: 'Regular', dokter: 'drg. SM', room: 'R1', keluhan: 'Gigi Berlubang', durasi: '60 Min', status: 'Waiting 20 Min', lab: 'OK', remark: 'Pasien sudah mengeluh ingin segera di treatment' },
-  { id: 10, mr: 2, appt: '10:45', name: 'Maya Sari', category: 'Regular', dokter: 'drg. RF', room: 'R3', keluhan: 'Konsultasi', durasi: '30 Min', status: 'Late', lab: 'NOK', remark: 'Pasien Telat Datang' },
-  { id: 11, mr: 2, appt: '11:00', name: 'Rizky Ramadhan', category: 'Regular', dokter: 'drg. AN', room: 'R2', keluhan: 'Sakit Gusi', durasi: '45 Min', status: 'Cancel', lab: 'NOK', remark: 'Pasien cancel' },
-  { id: 12, mr: 2, appt: '11:15', name: 'Putri Amelia', category: 'VIP', dokter: 'drg. SM', room: 'R1', keluhan: 'Whitening', durasi: '90 Min', status: 'Waiting 20 Min', lab: 'OK', remark: 'Pasien Kondusif' },
-  { id: 13, mr: 2, appt: '11:30', name: 'Arif Setiawan', category: 'Regular', dokter: 'drg. RF', room: 'R3', keluhan: 'Gigi Patah', durasi: '60 Min', status: 'Waiting 10 Min', lab: 'OK', remark: 'Pasien Kondusif' },
-  { id: 14, mr: 2, appt: '11:45', name: 'Lina Wulandari', category: 'Regular', dokter: 'drg. AN', room: 'R2', keluhan: 'Scaling', durasi: '45 Min', status: 'Waiting 10 Min', lab: 'OK', remark: 'Pasien Kondusif' },
-  { id: 15, mr: 2, appt: '12:00', name: 'Yoga Pratama', category: 'Regular', dokter: 'drg. SM', room: 'R1', keluhan: 'Tambal Gigi', durasi: '45 Min', status: 'Waiting 20 Min', lab: 'OK', remark: 'Waktu tunggu meningkat, berpotensi menghambat antrian' },
-  { id: 16, mr: 3, appt: '13:00', name: 'Intan Permata', category: 'VVIP', dokter: 'drg. RF', room: 'R3', keluhan: 'Gigi Ngilu', durasi: '30 Min', status: 'Waiting 20 Min', lab: 'OK', remark: 'Pasien sudah mengeluh ingin segera di treatment' },
-  { id: 17, mr: 2, appt: '13:15', name: 'Wahyu Nugroho', category: 'Regular', dokter: 'drg. AN', room: 'R2', keluhan: 'Gigi Berlubang', durasi: '60 Min', status: 'Waiting 20 Min', lab: 'OK', remark: 'Pasien belum dipanggil, antrian mulai padat' },
-  { id: 18, mr: 2, appt: '13:30', name: 'Nadia Putri', category: 'Regular', dokter: 'drg. SM', room: 'R1', keluhan: 'Konsultasi', durasi: '30 Min', status: 'Waiting 20 Min', lab: 'OK', remark: 'Pasien Kondusif' },
-  { id: 19, mr: 2, appt: '13:45', name: 'Ilham Maulana', category: 'Regular', dokter: 'drg. RF', room: 'R3', keluhan: 'Cabut Gigi', durasi: '60 Min', status: 'Waiting 20 Min', lab: 'OK', remark: 'Pasien Kondusif' },
-  { id: 20, mr: 2, appt: '14:00', name: 'Vina Oktaviani', category: 'Regular', dokter: 'drg. AN', room: 'R2', keluhan: 'Karang Gigi', durasi: '45 Min', status: 'Waiting 20 Min', lab: 'OK', remark: 'Pasien Kondusif' },
-  { id: 21, mr: 2, appt: '14:15', name: 'Reza Kurniawan', category: 'Regular', dokter: 'drg. SM', room: 'R1', keluhan: 'Sakit Gigi', durasi: '60 Min', status: 'Waiting 20 Min', lab: 'OK', remark: 'Pasien Kondusif' },
+  { id: 1, mr: 1, appt: '08:30', name: 'Agung Wijaya Kusuma', category: 'VIP', dokter: 'drg. SM', room: 'R1', keluhan: 'Gigi Ngilu / Sensitive', durasi: '45 Min', status: 'Complete', lab: 'OK', remark: 'Pasien sudah mengeluh ingin segera di treatment', phone: '0813-2037-6091'  },
+  { id: 2, mr: 2, appt: '08:45', name: 'Siti Rahmawati', category: 'Regular', dokter: 'drg. AN', room: 'R2', keluhan: 'Gigi Berlubang', durasi: '60 Min', status: 'Waiting 10 Min', lab: 'OK', remark: 'Pasien Kondusif', phone: '0821-2074-6182'  },
+  { id: 3, mr: 3, appt: '09:00', name: 'Budi Santoso', category: 'Regular', dokter: 'drg. SM', room: 'R1', keluhan: 'Scaling', durasi: '45 Min', status: 'Late', lab: 'NOK', remark: 'Pasien Telat Datang', phone: '0822-2111-6273'  },
+  { id: 4, mr: 2, appt: '09:15', name: 'Dewi Lestari', category: 'VVIP', dokter: 'drg. RF', room: 'R3', keluhan: 'Sakit Gigi', durasi: '60 Min', status: 'Cancel', lab: 'NOK', remark: 'Pasien Kondusif', phone: '0851-2148-6364'  },
+  { id: 5, mr: 2, appt: '09:30', name: 'Andi Pratama', category: 'Regular', dokter: 'drg. AN', room: 'R2', keluhan: 'Tambal Gigi', durasi: '45 Min', status: 'Waiting 10 Min', lab: 'OK', remark: 'Waktu tunggu meningkat, berpotensi menghambat antrian', phone: '0852-2185-6455'  },
+  { id: 6, mr: 2, appt: '09:45', name: 'Rina Marlina', category: 'VIP', dokter: 'drg. SM', room: 'R1', keluhan: 'Gigi Sensitif', durasi: '30 Min', status: 'Waiting 20 Min', lab: 'OK', remark: 'Proses berjalan sesuai estimasi, antrian kondusif', phone: '0895-2222-6546'  },
+  { id: 7, mr: 3, appt: '10:00', name: 'Fajar Hidayat', category: 'Regular', dokter: 'drg. RF', room: 'R3', keluhan: 'Cabut Gigi', durasi: '60 Min', status: 'Waiting 10 Min', lab: 'OK', remark: 'Pasien belum dipanggil, antrian mulai padat', phone: '0896-2259-6637'  },
+  { id: 8, mr: 2, appt: '10:15', name: 'Nur Aisyah', category: 'Regular', dokter: 'drg. AN', room: 'R2', keluhan: 'Karang Gigi', durasi: '45 Min', status: 'Waiting 20 Min', lab: 'OK', remark: 'Pasien Kondusif', phone: '0812-2296-6728'  },
+  { id: 9, mr: 2, appt: '10:30', name: 'Dimas Saputra', category: 'Regular', dokter: 'drg. SM', room: 'R1', keluhan: 'Gigi Berlubang', durasi: '60 Min', status: 'Waiting 20 Min', lab: 'OK', remark: 'Pasien sudah mengeluh ingin segera di treatment', phone: '0813-2333-6819'  },
+  { id: 10, mr: 2, appt: '10:45', name: 'Maya Sari', category: 'Regular', dokter: 'drg. RF', room: 'R3', keluhan: 'Konsultasi', durasi: '30 Min', status: 'Late', lab: 'NOK', remark: 'Pasien Telat Datang', phone: '0821-2370-6910'  },
+  { id: 11, mr: 2, appt: '11:00', name: 'Rizky Ramadhan', category: 'Regular', dokter: 'drg. AN', room: 'R2', keluhan: 'Sakit Gusi', durasi: '45 Min', status: 'Cancel', lab: 'NOK', remark: 'Pasien cancel', phone: '0822-2407-7001'  },
+  { id: 12, mr: 2, appt: '11:15', name: 'Putri Amelia', category: 'VIP', dokter: 'drg. SM', room: 'R1', keluhan: 'Whitening', durasi: '90 Min', status: 'Waiting 20 Min', lab: 'OK', remark: 'Pasien Kondusif', phone: '0851-2444-7092'  },
+  { id: 13, mr: 2, appt: '11:30', name: 'Arif Setiawan', category: 'Regular', dokter: 'drg. RF', room: 'R3', keluhan: 'Gigi Patah', durasi: '60 Min', status: 'Waiting 10 Min', lab: 'OK', remark: 'Pasien Kondusif', phone: '0852-2481-7183'  },
+  { id: 14, mr: 2, appt: '11:45', name: 'Lina Wulandari', category: 'Regular', dokter: 'drg. AN', room: 'R2', keluhan: 'Scaling', durasi: '45 Min', status: 'Waiting 10 Min', lab: 'OK', remark: 'Pasien Kondusif', phone: '0895-2518-7274'  },
+  { id: 15, mr: 2, appt: '12:00', name: 'Yoga Pratama', category: 'Regular', dokter: 'drg. SM', room: 'R1', keluhan: 'Tambal Gigi', durasi: '45 Min', status: 'Waiting 20 Min', lab: 'OK', remark: 'Waktu tunggu meningkat, berpotensi menghambat antrian', phone: '0896-2555-7365'  },
+  { id: 16, mr: 3, appt: '13:00', name: 'Intan Permata', category: 'VVIP', dokter: 'drg. RF', room: 'R3', keluhan: 'Gigi Ngilu', durasi: '30 Min', status: 'Waiting 20 Min', lab: 'OK', remark: 'Pasien sudah mengeluh ingin segera di treatment', phone: '0812-2592-7456'  },
+  { id: 17, mr: 2, appt: '13:15', name: 'Wahyu Nugroho', category: 'Regular', dokter: 'drg. AN', room: 'R2', keluhan: 'Gigi Berlubang', durasi: '60 Min', status: 'Waiting 20 Min', lab: 'OK', remark: 'Pasien belum dipanggil, antrian mulai padat', phone: '0813-2629-7547'  },
+  { id: 18, mr: 2, appt: '13:30', name: 'Nadia Putri', category: 'Regular', dokter: 'drg. SM', room: 'R1', keluhan: 'Konsultasi', durasi: '30 Min', status: 'Waiting 20 Min', lab: 'OK', remark: 'Pasien Kondusif', phone: '0821-2666-7638'  },
+  { id: 19, mr: 2, appt: '13:45', name: 'Ilham Maulana', category: 'Regular', dokter: 'drg. RF', room: 'R3', keluhan: 'Cabut Gigi', durasi: '60 Min', status: 'Waiting 20 Min', lab: 'OK', remark: 'Pasien Kondusif', phone: '0822-2703-7729'  },
+  { id: 20, mr: 2, appt: '14:00', name: 'Vina Oktaviani', category: 'Regular', dokter: 'drg. AN', room: 'R2', keluhan: 'Karang Gigi', durasi: '45 Min', status: 'Waiting 20 Min', lab: 'OK', remark: 'Pasien Kondusif', phone: '0851-2740-7820'  },
+  { id: 21, mr: 2, appt: '14:15', name: 'Reza Kurniawan', category: 'Regular', dokter: 'drg. SM', room: 'R1', keluhan: 'Sakit Gigi', durasi: '60 Min', status: 'Waiting 20 Min', lab: 'OK', remark: 'Pasien Kondusif', phone: '0852-2777-7911'  },
 ];
 
 // Tomorrow's schedule — a different set of booked patients. None of these
@@ -66,18 +66,18 @@ const MOCK_PATIENTS = [
 // status to show; the Status column renders "-" for every row instead
 // (handled in the Status cell below, keyed off `dayFilter`).
 const MOCK_PATIENTS_TOMORROW = [
-  { id: 101, mr: 2, appt: '08:00', name: 'Hendra Gunawan', category: 'Regular', dokter: 'drg. SM', room: 'R1', keluhan: 'Kontrol Kawat Gigi', durasi: '30 Min', status: null, lab: 'OK', remark: 'Jadwal kontrol rutin' },
-  { id: 102, mr: 1, appt: '08:30', name: 'Melati Suryani', category: 'VIP', dokter: 'drg. AN', room: 'R2', keluhan: 'Cabut Gigi Bungsu', durasi: '90 Min', status: null, lab: 'OK', remark: 'Pasien minta anestesi ringan' },
-  { id: 103, mr: 2, appt: '09:00', name: 'Bayu Kusnandar', category: 'Regular', dokter: 'drg. RF', room: 'R3', keluhan: 'Gigi Berlubang', durasi: '45 Min', status: null, lab: 'NOK', remark: 'Perlu rontgen dulu' },
-  { id: 104, mr: 3, appt: '09:30', name: 'Citra Dewanti', category: 'VVIP', dokter: 'drg. SM', room: 'R1', keluhan: 'Whitening', durasi: '90 Min', status: null, lab: 'OK', remark: 'Booking dari kemarin' },
-  { id: 105, mr: 2, appt: '10:00', name: 'Doni Firmansyah', category: 'Regular', dokter: 'drg. AN', room: 'R2', keluhan: 'Scaling', durasi: '45 Min', status: null, lab: 'OK', remark: 'Pasien baru' },
-  { id: 106, mr: 2, appt: '10:30', name: 'Eka Purnama', category: 'Regular', dokter: 'drg. RF', room: 'R3', keluhan: 'Sakit Gusi', durasi: '30 Min', status: null, lab: 'OK', remark: 'Pasien Kondusif' },
-  { id: 107, mr: 2, appt: '11:00', name: 'Galih Prasetyo', category: 'Regular', dokter: 'drg. SM', room: 'R1', keluhan: 'Tambal Gigi', durasi: '45 Min', status: null, lab: 'OK', remark: 'Reschedule dari minggu lalu' },
-  { id: 108, mr: 2, appt: '11:30', name: 'Herlina Wati', category: 'VIP', dokter: 'drg. AN', room: 'R2', keluhan: 'Konsultasi Behel', durasi: '30 Min', status: null, lab: 'OK', remark: 'Konsultasi pertama' },
-  { id: 109, mr: 2, appt: '13:00', name: 'Indra Gunawan', category: 'Regular', dokter: 'drg. RF', room: 'R3', keluhan: 'Gigi Ngilu', durasi: '45 Min', status: null, lab: 'OK', remark: 'Pasien Kondusif' },
-  { id: 110, mr: 2, appt: '13:30', name: 'Jasmine Anggraini', category: 'Regular', dokter: 'drg. SM', room: 'R1', keluhan: 'Karang Gigi', durasi: '45 Min', status: null, lab: 'OK', remark: 'Pasien Kondusif' },
-  { id: 111, mr: 2, appt: '14:00', name: 'Krisna Ardiansyah', category: 'Regular', dokter: 'drg. AN', room: 'R2', keluhan: 'Cabut Gigi', durasi: '60 Min', status: null, lab: 'NOK', remark: 'Perlu rontgen dulu' },
-  { id: 112, mr: 2, appt: '14:30', name: 'Lestari Handayani', category: 'Regular', dokter: 'drg. RF', room: 'R3', keluhan: 'Sakit Gigi', durasi: '60 Min', status: null, lab: 'OK', remark: 'Pasien Kondusif' },
+  { id: 101, mr: 2, appt: '08:00', name: 'Hendra Gunawan', category: 'Regular', dokter: 'drg. SM', room: 'R1', keluhan: 'Kontrol Kawat Gigi', durasi: '30 Min', status: null, lab: 'OK', remark: 'Jadwal kontrol rutin', phone: '0852-5737-6191'  },
+  { id: 102, mr: 1, appt: '08:30', name: 'Melati Suryani', category: 'VIP', dokter: 'drg. AN', room: 'R2', keluhan: 'Cabut Gigi Bungsu', durasi: '90 Min', status: null, lab: 'OK', remark: 'Pasien minta anestesi ringan', phone: '0895-5774-6282'  },
+  { id: 103, mr: 2, appt: '09:00', name: 'Bayu Kusnandar', category: 'Regular', dokter: 'drg. RF', room: 'R3', keluhan: 'Gigi Berlubang', durasi: '45 Min', status: null, lab: 'NOK', remark: 'Perlu rontgen dulu', phone: '0896-5811-6373'  },
+  { id: 104, mr: 3, appt: '09:30', name: 'Citra Dewanti', category: 'VVIP', dokter: 'drg. SM', room: 'R1', keluhan: 'Whitening', durasi: '90 Min', status: null, lab: 'OK', remark: 'Booking dari kemarin', phone: '0812-5848-6464'  },
+  { id: 105, mr: 2, appt: '10:00', name: 'Doni Firmansyah', category: 'Regular', dokter: 'drg. AN', room: 'R2', keluhan: 'Scaling', durasi: '45 Min', status: null, lab: 'OK', remark: 'Pasien baru', phone: '0813-5885-6555'  },
+  { id: 106, mr: 2, appt: '10:30', name: 'Eka Purnama', category: 'Regular', dokter: 'drg. RF', room: 'R3', keluhan: 'Sakit Gusi', durasi: '30 Min', status: null, lab: 'OK', remark: 'Pasien Kondusif', phone: '0821-5922-6646'  },
+  { id: 107, mr: 2, appt: '11:00', name: 'Galih Prasetyo', category: 'Regular', dokter: 'drg. SM', room: 'R1', keluhan: 'Tambal Gigi', durasi: '45 Min', status: null, lab: 'OK', remark: 'Reschedule dari minggu lalu', phone: '0822-5959-6737'  },
+  { id: 108, mr: 2, appt: '11:30', name: 'Herlina Wati', category: 'VIP', dokter: 'drg. AN', room: 'R2', keluhan: 'Konsultasi Behel', durasi: '30 Min', status: null, lab: 'OK', remark: 'Konsultasi pertama', phone: '0851-5996-6828'  },
+  { id: 109, mr: 2, appt: '13:00', name: 'Indra Gunawan', category: 'Regular', dokter: 'drg. RF', room: 'R3', keluhan: 'Gigi Ngilu', durasi: '45 Min', status: null, lab: 'OK', remark: 'Pasien Kondusif', phone: '0852-6033-6919'  },
+  { id: 110, mr: 2, appt: '13:30', name: 'Jasmine Anggraini', category: 'Regular', dokter: 'drg. SM', room: 'R1', keluhan: 'Karang Gigi', durasi: '45 Min', status: null, lab: 'OK', remark: 'Pasien Kondusif', phone: '0895-6070-7010'  },
+  { id: 111, mr: 2, appt: '14:00', name: 'Krisna Ardiansyah', category: 'Regular', dokter: 'drg. AN', room: 'R2', keluhan: 'Cabut Gigi', durasi: '60 Min', status: null, lab: 'NOK', remark: 'Perlu rontgen dulu', phone: '0896-6107-7101'  },
+  { id: 112, mr: 2, appt: '14:30', name: 'Lestari Handayani', category: 'Regular', dokter: 'drg. RF', room: 'R3', keluhan: 'Sakit Gigi', durasi: '60 Min', status: null, lab: 'OK', remark: 'Pasien Kondusif', phone: '0812-6144-7192'  },
 ];
 
 // Column widths as percentages of the table, proportional to Figma node
@@ -109,9 +109,15 @@ export default function TodaysPatient() {
   const [dayFilter, setDayFilter] = useState('Today');
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [detailOpen, setDetailOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
   const [nameSearchOpen, setNameSearchOpen] = useState(false);
   const [nameQuery, setNameQuery] = useState('');
+  // Toolbar search — searches directly in the field as you type (no popup
+  // step first), matching against patient name, patient ID, or phone number.
+  const [toolbarQuery, setToolbarQuery] = useState('');
+  // "No results" popup (Figma node 469:6139) — opens automatically a beat
+  // after the toolbar search settles on zero matches, so it doesn't flash
+  // open on every single keystroke while the user is still typing.
+  const [notFoundOpen, setNotFoundOpen] = useState(false);
   const [apptSortAsc, setApptSortAsc] = useState(true);
   // Remark column is freely editable per row — seeded from the mock data
   // (both Today's and Tomorrow's schedules), keyed by patient id so edits
@@ -127,15 +133,53 @@ export default function TodaysPatient() {
     setDetailOpen(true);
   }
 
+  function matchesToolbarQuery(patient, trimmedLowerQuery) {
+    const patientCode = `P-${String(patient.id).padStart(4, '0')}`.toLowerCase();
+    return (
+      patient.name.toLowerCase().includes(trimmedLowerQuery) ||
+      patientCode.includes(trimmedLowerQuery) ||
+      String(patient.id).includes(trimmedLowerQuery) ||
+      patient.phone?.toLowerCase().replace(/-/g, '').includes(trimmedLowerQuery.replace(/-/g, ''))
+    );
+  }
+
   const visiblePatients = useMemo(() => {
     const source = dayFilter === 'Tomorrow' ? MOCK_PATIENTS_TOMORROW : MOCK_PATIENTS;
-    const filtered = nameQuery.trim()
+
+    const byName = nameQuery.trim()
       ? source.filter((p) => p.name.toLowerCase().includes(nameQuery.trim().toLowerCase()))
       : source;
-    return [...filtered].sort((a, b) =>
+
+    const toolbarTrimmed = toolbarQuery.trim().toLowerCase();
+    const byToolbar = toolbarTrimmed
+      ? byName.filter((p) => matchesToolbarQuery(p, toolbarTrimmed))
+      : byName;
+
+    return [...byToolbar].sort((a, b) =>
       apptSortAsc ? a.appt.localeCompare(b.appt) : b.appt.localeCompare(a.appt)
     );
-  }, [dayFilter, nameQuery, apptSortAsc]);
+  }, [dayFilter, nameQuery, toolbarQuery, apptSortAsc]);
+
+  // Whether the toolbar search alone (name / ID / phone, independent of the
+  // Patient Name column's own search) has zero matches in the current
+  // Today/Tomorrow list — drives the "Patient not yet registered" popup.
+  const toolbarHasNoMatch = useMemo(() => {
+    const trimmed = toolbarQuery.trim().toLowerCase();
+    if (!trimmed) return false;
+    const source = dayFilter === 'Tomorrow' ? MOCK_PATIENTS_TOMORROW : MOCK_PATIENTS;
+    return !source.some((p) => matchesToolbarQuery(p, trimmed));
+  }, [toolbarQuery, dayFilter]);
+
+  // Debounce opening the popup so it doesn't flash open after every single
+  // keystroke while the user is still mid-typing a query that will match.
+  useEffect(() => {
+    if (!toolbarHasNoMatch) {
+      setNotFoundOpen(false);
+      return;
+    }
+    const timer = setTimeout(() => setNotFoundOpen(true), 500);
+    return () => clearTimeout(timer);
+  }, [toolbarHasNoMatch, toolbarQuery]);
 
   return (
     <div className="flex min-h-screen w-full bg-[#f5f6f8]">
@@ -182,17 +226,25 @@ export default function TodaysPatient() {
               </p>
 
               <div className="flex flex-wrap items-center gap-4">
-                <div
-                  id="search-patient-trigger"
-                  onClick={() => setSearchOpen(true)}
-                  className="relative w-[300px] max-w-full cursor-pointer"
-                >
+                <div id="search-patient-trigger" className="relative w-[300px] max-w-full">
                   <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
                   <Input
-                    readOnly
+                    value={toolbarQuery}
+                    onChange={(e) => setToolbarQuery(e.target.value)}
                     placeholder="Cari Pasien / ID Patient / Nomor Telp"
-                    className="h-10 cursor-pointer rounded-3xl border border-solid border-[#e2e8f0] bg-white pl-10 pr-4 text-sm shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)]"
+                    aria-label="Cari pasien berdasarkan nama, ID pasien, atau nomor telepon"
+                    className="h-10 rounded-3xl border border-solid border-[#e2e8f0] bg-white pl-10 pr-9 text-sm shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)]"
                   />
+                  {toolbarQuery && (
+                    <button
+                      type="button"
+                      aria-label="Clear search"
+                      onClick={() => setToolbarQuery('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="size-4" />
+                    </button>
+                  )}
                 </div>
 
                 <Button
@@ -393,7 +445,7 @@ export default function TodaysPatient() {
             open={detailOpen}
             onOpenChange={setDetailOpen}
           />
-          <SearchPatientDialog open={searchOpen} onOpenChange={setSearchOpen} />
+          <PatientNotFoundDialog open={notFoundOpen} onOpenChange={setNotFoundOpen} />
         </main>
       </div>
     </div>
