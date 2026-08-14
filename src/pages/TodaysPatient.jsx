@@ -1,14 +1,33 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Moon, Bell, Search, Plus, Eye, Pencil, ArrowUpDown, X, MessageSquare, Send } from 'lucide-react';
+import {
+  Moon,
+  Bell,
+  Search,
+  Plus,
+  Eye,
+  Pencil,
+  ArrowUpDown,
+  X,
+  MessageSquare,
+  Send,
+  Brush,
+  Sparkles,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { Switch } from '@/components/ui/switch';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -40,6 +59,7 @@ import { cn } from '@/lib/utils';
 
 const STATUS_STYLES = {
   Complete: 'border-transparent bg-[rgba(34,197,94,0.08)] text-[#16a34a]',
+  'In Treatment': 'border-transparent bg-[rgba(59,130,246,0.08)] text-[#3b82f6]',
   Late: 'border-transparent bg-[rgba(168,85,247,0.08)] text-[#a855f7]',
   Cancel: 'border-transparent bg-[rgba(239,68,68,0.08)] text-[#ef4444]',
   'Waiting 10 Min': 'border-transparent bg-[rgba(249,115,22,0.08)] text-[#f97316]',
@@ -249,6 +269,7 @@ export default function TodaysPatient() {
   const navigate = useNavigate();
   const location = useLocation();
   const { role, doctorName } = useRole();
+  const isReceptionist = role === 'Receptionist';
   // Doctor is scoped to their own clinical workflow: can't register a new
   // patient or book an appointment (that stays a front-desk job), and only
   // ever sees the roster of patients actually assigned to them.
@@ -305,14 +326,45 @@ export default function TodaysPatient() {
     }));
   }
 
-  // Status column is read-only for everyone except Doctor — clinical
-  // progress (Complete/Late/Cancel/Waiting) is their call to make, not the
-  // front desk's. Keyed by patient id so it survives sorting/filtering.
+  // Status is editable by both Doctor and Receptionist now, but each only
+  // owns half of it: Doctor moves the clinical side forward (In Treatment /
+  // Complete / how long someone's been Waiting), Receptionist handles the
+  // front-desk side (Late / Cancel). Admin keeps the full set. Options
+  // outside a role's own set still render (so the pill always shows the
+  // right label/color) but are disabled so they can't be picked. Keyed by
+  // patient id so it survives sorting/filtering.
   const [statusOverrides, setStatusOverrides] = useState({});
+  const allowedStatusOptions = isDoctor
+    ? STATUS_OPTIONS.filter((option) => option !== 'Late' && option !== 'Cancel')
+    : isReceptionist
+      ? STATUS_OPTIONS.filter((option) => option === 'Late' || option === 'Cancel')
+      : STATUS_OPTIONS;
 
-  function handleChangeStatus(patient, nextStatus) {
+  // Marking a patient Complete pauses on a "room's being cleaned" popup —
+  // the same mark-ready step Activity uses — instead of applying the
+  // status right away, so Complete always implies the room gets handed
+  // back to Available deliberately rather than silently.
+  const [cleaningDialog, setCleaningDialog] = useState(null);
+
+  function applyStatusChange(patient, nextStatus) {
     setStatusOverrides((prev) => ({ ...prev, [patient.id]: nextStatus }));
     toast.success(`Status ${patient.name} diperbarui ke "${nextStatus}"`);
+  }
+
+  function handleChangeStatus(patient, nextStatus) {
+    if (nextStatus === 'Complete') {
+      setCleaningDialog({ patient });
+      return;
+    }
+    applyStatusChange(patient, nextStatus);
+  }
+
+  function handleConfirmRoomReady() {
+    if (!cleaningDialog) return;
+    const { patient } = cleaningDialog;
+    setStatusOverrides((prev) => ({ ...prev, [patient.id]: 'Complete' }));
+    toast.success(`${patient.name} selesai ditangani — Ruangan ${patient.room} siap digunakan`);
+    setCleaningDialog(null);
   }
 
   // "Setting Room & Lab" popup (Figma node 556:859), opened from the
@@ -540,14 +592,19 @@ export default function TodaysPatient() {
                   </>
                 )}
 
-                <Button
-                  size="sm"
-                  onClick={() => setRoomLabSettingOpen(true)}
-                  className="h-9 rounded-3xl bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700"
-                >
-                  <img src={roomsLabsIcon} alt="" className="size-4" />
-                  Rooms &amp; Labs
-                </Button>
+                {/* Rooms & Labs is a front-desk setup task too — Doctor
+                    doesn't manage room/lab assignments, so it's left out of
+                    their toolbar along with New Registration/Appointment. */}
+                {!isDoctor && (
+                  <Button
+                    size="sm"
+                    onClick={() => setRoomLabSettingOpen(true)}
+                    className="h-9 rounded-3xl bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700"
+                  >
+                    <img src={roomsLabsIcon} alt="" className="size-4" />
+                    Rooms &amp; Labs
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -652,17 +709,9 @@ export default function TodaysPatient() {
                       <TableCell className="!align-middle py-3 text-left">
                         {(() => {
                           const currentStatus = statusOverrides[patient.id] ?? patient.status;
+                          // Tomorrow's not-yet-happened rows have no status
+                          // at all yet — nothing to show or edit.
                           if (!currentStatus) return <span className="text-[#94a3b8]">-</span>;
-                          // Only Doctor can change clinical progress — everyone
-                          // else (including Tomorrow's not-yet-happened rows)
-                          // just sees the read-only badge as before.
-                          if (!isDoctor) {
-                            return (
-                              <Badge className={cn('rounded-full px-2.5 py-1', STATUS_STYLES[currentStatus])}>
-                                {currentStatus}
-                              </Badge>
-                            );
-                          }
                           return (
                             <Select
                               value={currentStatus}
@@ -680,7 +729,11 @@ export default function TodaysPatient() {
                               </SelectTrigger>
                               <SelectContent>
                                 {STATUS_OPTIONS.map((option) => (
-                                  <SelectItem key={option} value={option}>
+                                  <SelectItem
+                                    key={option}
+                                    value={option}
+                                    disabled={!allowedStatusOptions.includes(option)}
+                                  >
                                     {option}
                                   </SelectItem>
                                 ))}
@@ -747,6 +800,39 @@ export default function TodaysPatient() {
             settings={roomLabSettings}
             onSave={handleSaveRoomLabSettings}
           />
+
+          {/* Mirrors Activity's "room's being cleaned" step — marking a
+              patient Complete here means their room needs a mark-ready
+              confirmation too, not just a status label flip. */}
+          <Dialog
+            open={!!cleaningDialog}
+            onOpenChange={(open) => !open && setCleaningDialog(null)}
+          >
+            <DialogContent className="sm:max-w-sm">
+              <DialogHeader>
+                <DialogTitle>Selesai Melayani {cleaningDialog?.patient.name}</DialogTitle>
+                <DialogDescription>
+                  Ruangan {cleaningDialog?.patient.room} sedang dibersihkan sebelum siap digunakan
+                  kembali.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex flex-col items-center gap-4 py-2">
+                <div className="flex size-14 items-center justify-center rounded-full bg-orange-50 text-orange-500">
+                  <Brush className="size-6" />
+                </div>
+                <p className="text-center text-sm text-slate-500">
+                  Tandai ruangan siap setelah proses pembersihan selesai.
+                </p>
+                <Button
+                  onClick={handleConfirmRoomReady}
+                  className="h-10 w-full rounded-xl bg-green-600 text-sm font-medium text-white hover:bg-green-700"
+                >
+                  <Sparkles className="size-4" />
+                  Tandai Ruangan Siap
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </main>
       </div>
     </motion.div>
