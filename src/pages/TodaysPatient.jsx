@@ -115,6 +115,16 @@ const COL_WIDTH = {
 const HEADER_CLASS =
   'h-auto whitespace-nowrap bg-[#f0fdf4] px-3 py-4 font-bold text-[#15803d]';
 
+// Formatted by hand (rather than toLocaleDateString's default output) so the
+// header always reads "Wed 12 Aug 2026" — short weekday, no leading zero on
+// the day, short month, no commas — and stays live to whatever day it
+// actually is instead of a date baked into the mock data.
+function formatHeaderDate(date) {
+  const weekday = date.toLocaleDateString('en-US', { weekday: 'short' });
+  const month = date.toLocaleDateString('en-US', { month: 'short' });
+  return `${weekday} ${date.getDate()} ${month} ${date.getFullYear()}`;
+}
+
 export default function TodaysPatient() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -264,7 +274,7 @@ export default function TodaysPatient() {
         <header className="flex h-[50px] w-full items-center justify-between border-b border-slate-200 bg-white px-6">
           <div className="flex items-baseline gap-3">
             <h1 className="text-lg font-bold text-slate-900">Today’s Patient</h1>
-            <span className="text-sm text-slate-500">Wed 12 Aug 2026</span>
+            <span className="text-sm text-slate-500">{formatHeaderDate(new Date())}</span>
           </div>
           <div className="flex items-center gap-3">
             <button

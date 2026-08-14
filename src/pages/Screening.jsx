@@ -111,6 +111,22 @@ const STATUS_STYLES = {
   Selesai: 'border-transparent bg-[rgba(34,197,94,0.08)] text-[#16a34a]',
 };
 
+// Explicit column widths so `table-fixed` doesn't split width evenly —
+// without this the "No" column (just 1-2 digits) ended up as wide as
+// "Keluhan Awal", leaving it looking oddly stretched.
+const COL_WIDTH = {
+  no: 'w-[5%]',
+  mrn: 'w-[10%]',
+  name: 'w-[16%]',
+  phone: 'w-[12%]',
+  keluhan: 'w-[25%]',
+  appt: 'w-[10%]',
+  status: 'w-[10%]',
+  action: 'w-[12%]',
+};
+
+const HEADER_CLASS = 'h-auto whitespace-nowrap bg-[#f0fdf4] px-3 py-4 font-bold text-[#15803d]';
+
 function nowTimeLabel() {
   const d = new Date();
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
@@ -549,14 +565,14 @@ export default function Screening() {
               <Table className="table-fixed">
                 <TableHeader>
                   <TableRow className="border-transparent hover:bg-transparent">
-                    <TableHead className="h-auto whitespace-nowrap bg-[#f0fdf4] px-3 py-4 font-bold text-[#15803d]">No</TableHead>
-                    <TableHead className="h-auto whitespace-nowrap bg-[#f0fdf4] px-3 py-4 font-bold text-[#15803d]">MRN</TableHead>
-                    <TableHead className="h-auto whitespace-nowrap bg-[#f0fdf4] px-3 py-4 font-bold text-[#15803d]">Nama Pasien</TableHead>
-                    <TableHead className="h-auto whitespace-nowrap bg-[#f0fdf4] px-3 py-4 font-bold text-[#15803d]">Telp</TableHead>
-                    <TableHead className="h-auto whitespace-nowrap bg-[#f0fdf4] px-3 py-4 font-bold text-[#15803d]">Keluhan Awal</TableHead>
-                    <TableHead className="h-auto whitespace-nowrap bg-[#f0fdf4] px-3 py-4 font-bold text-[#15803d]">Jadwal Appt</TableHead>
-                    <TableHead className="h-auto whitespace-nowrap bg-[#f0fdf4] px-3 py-4 font-bold text-[#15803d]">Status</TableHead>
-                    <TableHead className="h-auto whitespace-nowrap bg-[#f0fdf4] px-3 py-4 font-bold text-[#15803d]">Aksi</TableHead>
+                    <TableHead className={cn(HEADER_CLASS, COL_WIDTH.no)}>No</TableHead>
+                    <TableHead className={cn(HEADER_CLASS, COL_WIDTH.mrn)}>MRN</TableHead>
+                    <TableHead className={cn(HEADER_CLASS, COL_WIDTH.name)}>Nama Pasien</TableHead>
+                    <TableHead className={cn(HEADER_CLASS, COL_WIDTH.phone)}>Telp</TableHead>
+                    <TableHead className={cn(HEADER_CLASS, COL_WIDTH.keluhan)}>Keluhan Awal</TableHead>
+                    <TableHead className={cn(HEADER_CLASS, COL_WIDTH.appt)}>Jadwal Appt</TableHead>
+                    <TableHead className={cn(HEADER_CLASS, COL_WIDTH.status)}>Status</TableHead>
+                    <TableHead className={cn(HEADER_CLASS, COL_WIDTH.action)}>Aksi</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
