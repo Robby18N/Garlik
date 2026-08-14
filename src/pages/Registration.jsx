@@ -17,6 +17,22 @@ import {
   SectionHeader,
   FieldRow,
 } from '@/components/form-fields';
+import { resolveDayBucket } from '@/lib/utils';
+
+// Ids assigned to patients registered here — kept in its own range from
+// Today's Patient's own runtime counter (both just need to avoid colliding
+// with the 1-21 / 101-112 seeded mock ids; each file keeps its own counter
+// since a fresh page load of Registration doesn't share module state with
+// TodaysPatient anyway).
+let nextRegisteredId = 800;
+
+// "HH:MM" for a walk-in registration's Appt column (no appointment was
+// actually booked) — same hand-rolled format used everywhere else in the
+// app instead of toLocaleTimeString's locale-dependent separator.
+function nowTimeLabel() {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
 
 // Flex-grow ratio + minimum width (px) for each field, proportional to the
 // exact pixel widths measured off Figma node 469:2356's Input Field
@@ -213,6 +229,10 @@ export default function Registration() {
   }
 
   function handleSave() {
+    const fullName = `${patientData.firstName} ${patientData.lastName}`.trim();
+    let newPatient;
+    let bucket = 'today';
+
     if (isAppointmentFlow) {
       const required = [
         ['appointmentDoctor', 'Doctor'],
@@ -225,11 +245,48 @@ export default function Registration() {
         toast.error(`Please fill in ${missing[1]}`);
         return;
       }
+      bucket = resolveDayBucket(patientData.appointmentDate);
+      newPatient = {
+        id: nextRegisteredId++,
+        mr: 2,
+        appt: patientData.appointmentTime,
+        name: fullName,
+        category: patientData.category || 'Regular',
+        dokter: patientData.appointmentDoctor,
+        room: patientData.appointmentRoom,
+        keluhan: patientData.appointmentKeluhan || '-',
+        durasi: patientData.appointmentDuration || '-',
+        status: bucket === 'today' ? 'Waiting 10 Min' : null,
+        lab: '-',
+        remark: '-',
+        phone: patientData.phone1,
+      };
       toast.success('Patient registered and appointment booked successfully');
     } else {
+      // A plain walk-in registration has no doctor/room/appointment info at
+      // all (those fields only exist in the appointment flow's step 3), so
+      // it still lands in Today's list — that's where the receptionist is
+      // working from — but with placeholder clinical fields until an
+      // appointment is actually booked for this patient separately.
+      newPatient = {
+        id: nextRegisteredId++,
+        mr: 2,
+        appt: nowTimeLabel(),
+        name: fullName,
+        category: patientData.category || 'Regular',
+        dokter: '-',
+        room: '-',
+        keluhan: 'Registrasi Baru',
+        durasi: '-',
+        status: 'Waiting 10 Min',
+        lab: '-',
+        remark: '-',
+        phone: patientData.phone1,
+      };
       toast.success('Patient registered successfully');
     }
-    navigate('/patients');
+
+    navigate('/patients', { state: { newPatient, bucket } });
   }
 
   return (

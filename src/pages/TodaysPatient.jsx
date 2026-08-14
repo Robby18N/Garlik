@@ -59,6 +59,11 @@ import { useRole } from '@/context/role-context';
 import { usePatientStatus } from '@/context/patient-status-context';
 import { cn } from '@/lib/utils';
 
+// Ids assigned to rows created at runtime (new registrations / bookings) —
+// starts well above the seeded mock ids (today's go up to 21, tomorrow's up
+// to 112) so a freshly-added row never collides with an existing one.
+let nextRuntimePatientId = 500;
+
 const STATUS_STYLES = {
   Complete: 'border-transparent bg-[rgba(34,197,94,0.08)] text-[#16a34a]',
   'In Treatment': 'border-transparent bg-[rgba(59,130,246,0.08)] text-[#3b82f6]',
@@ -291,6 +296,12 @@ export default function TodaysPatient() {
   }, [showSkeleton]);
 
   const [dayFilter, setDayFilter] = useState('Today');
+  // Lifted from module-level consts into state — Registration's "New
+  // Registration"/"make an appointment" flows and the standalone "+
+  // Appointment" dialog both need to actually add a row here once they
+  // finish, not just show a success toast and leave the table unchanged.
+  const [todayPatients, setTodayPatients] = useState(MOCK_PATIENTS);
+  const [tomorrowPatients, setTomorrowPatients] = useState(MOCK_PATIENTS_TOMORROW);
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [nameSearchOpen, setNameSearchOpen] = useState(false);
@@ -327,6 +338,35 @@ export default function TodaysPatient() {
       ],
     }));
   }
+
+  // Adds a freshly registered/booked patient straight into the table —
+  // used by both the "New Registration" flow (arrives via router state
+  // after navigating back from /registration) and the standalone "+
+  // Appointment" dialog (same page, called directly). `bucket` decides
+  // whether it lands under Today or Tomorrow, matching whichever tab the
+  // appointment's own date actually falls on.
+  function addPatientRow(row, bucket) {
+    const withId = { ...row, id: row.id ?? nextRuntimePatientId++ };
+    if (bucket === 'tomorrow') {
+      setTomorrowPatients((prev) => [withId, ...prev]);
+    } else {
+      setTodayPatients((prev) => [withId, ...prev]);
+    }
+    setRemarkThreads((prev) => ({ ...prev, [withId.id]: [] }));
+  }
+
+  // Registration navigates back here with the newly created row in router
+  // state (it's a full page, not a modal, so it can't just call a prop).
+  // Consumed once on arrival, then cleared from history state so refreshing
+  // or navigating back to this page doesn't re-add the same row again.
+  useEffect(() => {
+    const incoming = location.state?.newPatient;
+    if (!incoming) return;
+    addPatientRow(incoming, location.state?.bucket ?? 'today');
+    toast.success(`${incoming.name} ditambahkan ke ${location.state?.bucket === 'tomorrow' ? "Tomorrow's" : "Today's"} Patient`);
+    navigate(location.pathname, { replace: true, state: {} });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state]);
 
   // Status is editable by both Doctor and Receptionist now, but each only
   // owns half of it: Doctor moves the clinical side forward (In Treatment /
@@ -424,9 +464,9 @@ export default function TodaysPatient() {
   // the "Showing X of Y" count, and the not-found check all agree on what
   // "the list" means for this login.
   const daySource = useMemo(() => {
-    const base = dayFilter === 'Tomorrow' ? MOCK_PATIENTS_TOMORROW : MOCK_PATIENTS;
+    const base = dayFilter === 'Tomorrow' ? tomorrowPatients : todayPatients;
     return isDoctor ? base.filter((p) => p.dokter === doctorName) : base;
-  }, [dayFilter, isDoctor, doctorName]);
+  }, [dayFilter, isDoctor, doctorName, todayPatients, tomorrowPatients]);
 
   const visiblePatients = useMemo(() => {
     const byName = nameQuery.trim()
@@ -515,7 +555,7 @@ export default function TodaysPatient() {
           <SummaryCards
             patients={
               isDoctor
-                ? MOCK_PATIENTS.filter((p) => p.dokter === doctorName).map((p) => ({
+                ? todayPatients.filter((p) => p.dokter === doctorName).map((p) => ({
                     ...p,
                     status: statusOverrides[p.id] ?? p.status,
                   }))
@@ -810,7 +850,11 @@ export default function TodaysPatient() {
             onOpenChange={setDetailOpen}
           />
           <PatientNotFoundDialog open={notFoundOpen} onOpenChange={setNotFoundOpen} />
-          <MakeAppointmentDialog open={appointmentDialogOpen} onOpenChange={setAppointmentDialogOpen} />
+          <MakeAppointmentDialog
+            open={appointmentDialogOpen}
+            onOpenChange={setAppointmentDialogOpen}
+            onBooked={addPatientRow}
+          />
           <SettingRoomLabDialog
             open={roomLabSettingOpen}
             onOpenChange={setRoomLabSettingOpen}

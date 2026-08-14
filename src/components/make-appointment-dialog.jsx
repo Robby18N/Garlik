@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import Stepper from '@/components/stepper';
 import { SelectField, TextField, DateField, FieldRow } from '@/components/form-fields';
-import { cn } from '@/lib/utils';
+import { cn, resolveDayBucket } from '@/lib/utils';
 
 const STEPS = ['Pilih Pasien', 'Detail Appointment'];
 
@@ -52,7 +52,7 @@ const initialAppointment = {
  * 2 captures the appointment details (doctor/room/keluhan/duration/date/
  * time), matching the same fields Today's Patient's table itself displays.
  */
-export default function MakeAppointmentDialog({ open, onOpenChange }) {
+export default function MakeAppointmentDialog({ open, onOpenChange, onBooked }) {
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [query, setQuery] = useState('');
@@ -114,6 +114,27 @@ export default function MakeAppointmentDialog({ open, onOpenChange }) {
       toast.error(`Please fill in ${missing[1]}`);
       return;
     }
+    // Feed the new appointment straight into Today's Patient's table — same
+    // page, so this is a direct callback rather than router state (that
+    // trick is only needed for Registration, which is a full page nav).
+    onBooked?.(
+      {
+        mr: 2,
+        appt: appointment.time,
+        name: selectedPatient.name,
+        category: selectedPatient.category,
+        dokter: appointment.doctor,
+        room: appointment.room,
+        keluhan: appointment.keluhan || '-',
+        durasi: appointment.duration || '-',
+        status: 'Waiting 10 Min',
+        lab: '-',
+        remark: '-',
+        phone: selectedPatient.phone,
+      },
+      resolveDayBucket(appointment.date)
+    );
+
     toast.success(
       `Appointment untuk ${selectedPatient.name} berhasil dibuat — ${appointment.date} ${appointment.time}`
     );
