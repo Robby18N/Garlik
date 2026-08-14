@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Moon, Bell, Search, Plus, Eye, Pencil, ArrowUpDown, X } from 'lucide-react';
+import { toast } from 'sonner';
 import { Switch } from '@/components/ui/switch';
 
 import { Button } from '@/components/ui/button';
@@ -21,6 +22,7 @@ import SummaryCards from '@/components/summary-cards';
 import PatientNameHoverCard from '@/components/patient-name-hover-card';
 import PatientDetailSheet from '@/components/patient-detail-sheet';
 import PatientNotFoundDialog from '@/components/patient-not-found-dialog';
+import SettingRoomLabDialog from '@/components/setting-room-lab-dialog';
 import MrCheckIcon from '@/components/mr-check-icon';
 import roomsLabsIcon from '@/assets/rooms-labs-icon.png';
 import { cn } from '@/lib/utils';
@@ -133,6 +135,33 @@ export default function TodaysPatient() {
       [...MOCK_PATIENTS, ...MOCK_PATIENTS_TOMORROW].map((p) => [p.id, p.remark])
     )
   );
+
+  // "Setting Room & Lab" popup (Figma node 556:859), opened from the
+  // toolbar's "Rooms & Labs" button. `roomLabSettings` is null until the
+  // user actually clicks Save at least once — Tomorrow's Room/Lab columns
+  // stay "-" until then, and auto-fill per-doctor once it's set.
+  const [roomLabSettingOpen, setRoomLabSettingOpen] = useState(false);
+  const [roomLabSettings, setRoomLabSettings] = useState(null);
+
+  function handleSaveRoomLabSettings(nextSettings) {
+    setRoomLabSettings(nextSettings);
+    toast.success('Room & Lab settings saved');
+  }
+
+  // Tomorrow's Room/Lab aren't fixed yet (no appointment has happened), so
+  // they auto-fill from whichever doctor is booked, per the Rooms & Labs
+  // setting — until Save has been clicked at least once, both stay "-".
+  // Today's schedule is unaffected and always shows its own fixed values.
+  function getRoomLabDisplay(patient) {
+    if (dayFilter !== 'Tomorrow') {
+      return { room: patient.room, lab: patient.lab };
+    }
+    const doctorSetting = roomLabSettings?.[patient.dokter];
+    return {
+      room: doctorSetting?.room ?? '-',
+      lab: doctorSetting ? (doctorSetting.lab ? 'OK' : 'NOK') : '-',
+    };
+  }
 
   function handleViewPatient(patient) {
     setSelectedPatient(patient);
@@ -259,7 +288,10 @@ export default function TodaysPatient() {
                   New Registration
                 </Button>
 
-                <Button className="h-9 rounded-3xl bg-green-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-green-700">
+                <Button
+                  onClick={() => setRoomLabSettingOpen(true)}
+                  className="h-9 rounded-3xl bg-green-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-green-700"
+                >
                   <img src={roomsLabsIcon} alt="" className="size-4" />
                   Rooms &amp; Labs
                 </Button>
@@ -353,7 +385,9 @@ export default function TodaysPatient() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {visiblePatients.map((patient, index) => (
+                  {visiblePatients.map((patient, index) => {
+                    const { room: roomDisplay, lab: labDisplay } = getRoomLabDisplay(patient);
+                    return (
                     <TableRow
                       key={patient.id}
                       className={cn('border-b border-[#e2e8f0]', index % 2 === 1 && 'bg-[#f8fafc]')}
@@ -369,7 +403,7 @@ export default function TodaysPatient() {
                         <PatientNameHoverCard name={patient.name} category={patient.category} />
                       </TableCell>
                       <TableCell className="!align-middle py-3 text-left text-[#334155]">{patient.dokter}</TableCell>
-                      <TableCell className="!align-middle py-3 text-left text-[#334155]">{patient.room}</TableCell>
+                      <TableCell className="!align-middle py-3 text-left text-[#334155]">{roomDisplay}</TableCell>
                       <TableCell className="!align-middle py-3 whitespace-normal text-left text-[#334155]">
                         {patient.keluhan}
                       </TableCell>
@@ -383,7 +417,7 @@ export default function TodaysPatient() {
                           <span className="text-[#94a3b8]">-</span>
                         )}
                       </TableCell>
-                      <TableCell className="!align-middle py-3 text-left text-[#334155]">{patient.lab}</TableCell>
+                      <TableCell className="!align-middle py-3 text-left text-[#334155]">{labDisplay}</TableCell>
                       <TableCell className="!align-middle py-3 text-left">
                         {/* Free-text, auto-growing remark — height follows the number
                             of lines/paragraphs typed, and the row height (shared by
@@ -431,7 +465,8 @@ export default function TodaysPatient() {
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                   {visiblePatients.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={12} className="h-16 text-left text-[#64748b]">
@@ -450,6 +485,12 @@ export default function TodaysPatient() {
             onOpenChange={setDetailOpen}
           />
           <PatientNotFoundDialog open={notFoundOpen} onOpenChange={setNotFoundOpen} />
+          <SettingRoomLabDialog
+            open={roomLabSettingOpen}
+            onOpenChange={setRoomLabSettingOpen}
+            settings={roomLabSettings}
+            onSave={handleSaveRoomLabSettings}
+          />
         </main>
       </div>
     </div>
