@@ -5,9 +5,9 @@ import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Card, CardContent } from '@/components/ui/card';
 import AppSidebar from '@/components/app-sidebar';
+import AccountMenu from '@/components/account-menu';
 import Stepper from '@/components/stepper';
 import {
   TextField,
@@ -15,7 +15,15 @@ import {
   DateField,
   UploadField,
   SectionHeader,
+  FieldRow,
 } from '@/components/form-fields';
+
+// Flex-grow ratio + minimum width (px) for each field, proportional to the
+// exact pixel widths measured off Figma node 469:2356's Input Field
+// instances — so narrow fields (Title, Sex) stay narrow and wide ones
+// (First Name, Phone Number) stay wide, instead of every field in a row
+// being forced to the same width.
+const W = (px) => ({ flexGrow: px, flexBasis: `${px}px` });
 
 const STEPS = ['Input Data Patient', 'Medical Record'];
 
@@ -223,9 +231,7 @@ export default function Registration() {
           >
             <Bell className="size-4" />
           </button>
-          <Avatar className="size-[30px]">
-            <AvatarFallback className="bg-green-100 text-green-700">RN</AvatarFallback>
-          </Avatar>
+          <AccountMenu />
         </div>
       </header>
 
@@ -256,9 +262,17 @@ export default function Registration() {
                 <p className="text-base font-semibold text-[#020617]">New Registration</p>
               </div>
 
-              {/* Stepper */}
-              <div className="flex items-center justify-center border-b border-[#e2e8f0] py-8">
-                <Stepper steps={STEPS} activeIndex={step} />
+              {/* Stepper — Figma's stepper band sits on a faint dot-grid texture */}
+              <div className="relative flex items-center justify-center overflow-hidden border-b border-[#e2e8f0] py-8">
+                <div
+                  aria-hidden="true"
+                  className="absolute inset-0 opacity-[0.35]"
+                  style={{
+                    backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)',
+                    backgroundSize: '14px 14px',
+                  }}
+                />
+                <Stepper steps={STEPS} activeIndex={step} className="relative" />
               </div>
 
               {step === 0 ? (
@@ -266,12 +280,13 @@ export default function Registration() {
                   <CardContent className="flex flex-col gap-5 px-0 pt-5">
                     <div className="flex flex-col gap-3">
                       <SectionHeader first>Profile Patient</SectionHeader>
-                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                      <FieldRow>
                         <SelectField
                           label="Title"
                           options={TITLES}
                           value={patientData.title}
                           onChange={(e) => updatePatient('title', e.target.value)}
+                          style={W(100)}
                         />
                         <TextField
                           label="First Name"
@@ -279,40 +294,45 @@ export default function Registration() {
                           placeholder="Input First Name.."
                           value={patientData.firstName}
                           onChange={(e) => updatePatient('firstName', e.target.value)}
-                          className="col-span-2"
+                          style={W(270)}
                         />
                         <TextField
                           label="Last Name"
                           placeholder="Input Last Name.."
                           value={patientData.lastName}
                           onChange={(e) => updatePatient('lastName', e.target.value)}
-                          className="col-span-2"
+                          style={W(270)}
                         />
                         <TextField
                           label="Nickname"
                           placeholder="Type here.."
                           value={patientData.nickname}
                           onChange={(e) => updatePatient('nickname', e.target.value)}
+                          style={W(259)}
                         />
                         <TextField
                           label="Birth Place"
                           placeholder="Type here.."
                           value={patientData.birthPlace}
                           onChange={(e) => updatePatient('birthPlace', e.target.value)}
+                          style={W(172)}
                         />
                         <DateField
                           label="Birth Date"
+                          iconPosition="right"
                           value={patientData.birthDate}
                           onChange={(e) => updatePatient('birthDate', e.target.value)}
+                          style={W(172)}
                         />
-                      </div>
-                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                      </FieldRow>
+                      <FieldRow>
                         <SelectField
                           label="Sex"
                           required
                           options={SEXES}
                           value={patientData.sex}
                           onChange={(e) => updatePatient('sex', e.target.value)}
+                          style={W(100)}
                         />
                         <TextField
                           label="Religion"
@@ -320,20 +340,21 @@ export default function Registration() {
                           placeholder="Type here.."
                           value={patientData.religion}
                           onChange={(e) => updatePatient('religion', e.target.value)}
-                          className="col-span-2"
+                          style={W(230)}
                         />
                         <TextField
                           label="Hobby"
                           placeholder="Type here.."
                           value={patientData.hobby}
                           onChange={(e) => updatePatient('hobby', e.target.value)}
-                          className="col-span-2"
+                          style={W(230)}
                         />
                         <TextField
                           label="Occupation"
                           placeholder="Type here.."
                           value={patientData.occupation}
                           onChange={(e) => updatePatient('occupation', e.target.value)}
+                          style={W(230)}
                         />
                         <UploadField
                           label="ID Card Photo"
@@ -341,26 +362,28 @@ export default function Registration() {
                           onFileChange={(e) =>
                             updatePatient('idCardPhotoName', e.target.files?.[0]?.name ?? '')
                           }
-                          className="col-span-2"
+                          style={W(290)}
                         />
                         <TextField
                           label="ID card Number"
                           placeholder="Type here.."
                           value={patientData.idCardNumber}
                           onChange={(e) => updatePatient('idCardNumber', e.target.value)}
+                          style={W(150)}
                         />
-                      </div>
+                      </FieldRow>
                     </div>
 
                     <div className="flex flex-col gap-3">
                       <SectionHeader>Contact &amp; Address</SectionHeader>
-                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                      <FieldRow>
                         <TextField
                           label="Phone Number 1"
                           required
                           placeholder="Input Phone Number.."
                           value={patientData.phone1}
                           onChange={(e) => updatePatient('phone1', e.target.value)}
+                          style={W(220)}
                         />
                         <TextField
                           label="Phone Number 2"
@@ -368,6 +391,7 @@ export default function Registration() {
                           placeholder="Input Phone Number.."
                           value={patientData.phone2}
                           onChange={(e) => updatePatient('phone2', e.target.value)}
+                          style={W(220)}
                         />
                         <TextField
                           label="Emergency Contact Name"
@@ -375,6 +399,7 @@ export default function Registration() {
                           placeholder="Type here.."
                           value={patientData.emergencyContactName}
                           onChange={(e) => updatePatient('emergencyContactName', e.target.value)}
+                          style={W(230)}
                         />
                         <TextField
                           label="Emergency Contact Phone Number"
@@ -382,7 +407,7 @@ export default function Registration() {
                           placeholder="Type here.."
                           value={patientData.emergencyContactPhone}
                           onChange={(e) => updatePatient('emergencyContactPhone', e.target.value)}
-                          className="col-span-2"
+                          style={W(330)}
                         />
                         <TextField
                           label="Email"
@@ -390,134 +415,151 @@ export default function Registration() {
                           placeholder="Type here.."
                           value={patientData.email}
                           onChange={(e) => updatePatient('email', e.target.value)}
+                          style={W(150)}
                         />
-                      </div>
-                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                      </FieldRow>
+                      <FieldRow>
                         <TextField
                           label="Street"
                           placeholder="Input Street.."
                           value={patientData.street}
                           onChange={(e) => updatePatient('street', e.target.value)}
+                          style={W(309)}
                         />
                         <SelectField
                           label="Country"
                           options={COUNTRIES}
                           value={patientData.country}
                           onChange={(e) => updatePatient('country', e.target.value)}
+                          style={W(187)}
                         />
                         <SelectField
                           label="Province"
                           options={PROVINCES}
                           value={patientData.province}
                           onChange={(e) => updatePatient('province', e.target.value)}
+                          style={W(187)}
                         />
                         <SelectField
                           label="City"
                           options={CITIES}
                           value={patientData.city}
                           onChange={(e) => updatePatient('city', e.target.value)}
+                          style={W(187)}
                         />
                         <SelectField
                           label="District"
                           options={DISTRICTS}
                           value={patientData.district}
                           onChange={(e) => updatePatient('district', e.target.value)}
+                          style={W(187)}
                         />
                         <SelectField
                           label="Sub District"
                           options={SUB_DISTRICTS}
                           value={patientData.subDistrict}
                           onChange={(e) => updatePatient('subDistrict', e.target.value)}
+                          style={W(187)}
                         />
-                      </div>
+                      </FieldRow>
                     </div>
 
                     <div className="flex flex-col gap-3">
                       <SectionHeader>Membership</SectionHeader>
-                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-                        <DateField label="Date Register" disabled />
+                      <FieldRow>
+                        <DateField label="Date Register" disabled style={W(270)} />
                         <TextField
                           label="Guarantee Company"
                           placeholder="Input Guarantee Company"
                           disabled
+                          style={W(270)}
                         />
                         <TextField
                           label="Relative Name"
                           placeholder="Input Relative Name.."
                           disabled
+                          style={W(259)}
                         />
                         <SelectField
                           label="Category"
                           options={PATIENT_CATEGORIES}
                           value={patientData.category}
                           onChange={(e) => updatePatient('category', e.target.value)}
+                          style={W(205)}
                         />
                         <TextField
                           label="Membership Number"
                           placeholder="Type here.."
                           value={patientData.membershipNumber}
                           onChange={(e) => updatePatient('membershipNumber', e.target.value)}
+                          style={W(252)}
                         />
-                      </div>
-                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                      </FieldRow>
+                      <FieldRow>
                         <SelectField
                           label="How did you find us?"
                           options={FIND_US_OPTIONS}
                           value={patientData.howDidYouFindUs}
                           onChange={(e) => updatePatient('howDidYouFindUs', e.target.value)}
-                          className="col-span-2"
+                          style={W(270)}
                         />
                         <SelectField
                           label="Relatives"
                           options={RELATIVE_OPTIONS}
                           value={patientData.relatives}
                           onChange={(e) => updatePatient('relatives', e.target.value)}
-                          className="col-span-2"
+                          style={W(270)}
                         />
-                      </div>
+                      </FieldRow>
                     </div>
 
                     {isAppointmentFlow && (
                       <div className="flex flex-col gap-3">
                         <SectionHeader>Appointment</SectionHeader>
-                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                        <FieldRow>
                           <SelectField
                             label="Doctor"
                             options={DOCTORS}
                             value={patientData.appointmentDoctor}
                             onChange={(e) => updatePatient('appointmentDoctor', e.target.value)}
+                            style={W(172)}
                           />
                           <SelectField
                             label="Room"
                             options={ROOMS}
                             value={patientData.appointmentRoom}
                             onChange={(e) => updatePatient('appointmentRoom', e.target.value)}
+                            style={W(172)}
                           />
                           <TextField
                             label="Keluhan"
                             placeholder="Type here.."
                             value={patientData.appointmentKeluhan}
                             onChange={(e) => updatePatient('appointmentKeluhan', e.target.value)}
-                            className="col-span-2"
+                            style={W(270)}
                           />
                           <SelectField
                             label="Est. Duration"
                             options={DURATIONS}
                             value={patientData.appointmentDuration}
                             onChange={(e) => updatePatient('appointmentDuration', e.target.value)}
+                            style={W(172)}
                           />
                           <DateField
                             label="Appointment Date"
+                            iconPosition="right"
                             value={patientData.appointmentDate}
                             onChange={(e) => updatePatient('appointmentDate', e.target.value)}
+                            style={W(172)}
                           />
                           <TextField
                             label="Appointment Time"
                             type="time"
                             value={patientData.appointmentTime}
                             onChange={(e) => updatePatient('appointmentTime', e.target.value)}
+                            style={W(172)}
                           />
-                        </div>
+                        </FieldRow>
                       </div>
                     )}
                   </CardContent>

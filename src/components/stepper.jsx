@@ -1,11 +1,14 @@
+import { Check } from 'lucide-react';
+
 import { cn } from '@/lib/utils';
 
 /**
- * Professional multi-step progress indicator matching Figma's "Step Shape"
- * component (node 469:2378/469:2381/469:2385): a 40px circle with a 2px
- * border — filled with a small solid dot when active/completed — joined
- * by a 3px connector line, with a bold label under the active step and a
- * muted label under steps not yet reached.
+ * Professional multi-step progress indicator (green variant of the
+ * "checkmark + halo" stepper style): a solid circle with a white checkmark
+ * once a step is completed, a solid circle with a soft glowing halo ring
+ * around it while a step is active, and a light outlined circle with a
+ * small muted dot for steps not yet reached — joined by connector lines
+ * that turn solid green only once the step before them is fully completed.
  *
  * @param {{ steps: string[], activeIndex: number, className?: string }} props
  */
@@ -20,18 +23,30 @@ export default function Stepper({ steps, activeIndex, className }) {
         return (
           <div key={label} className="flex items-start">
             <div className="flex flex-col items-center gap-2 px-3">
-              <div
-                className={cn(
-                  'flex size-10 shrink-0 items-center justify-center rounded-[20px] border-2',
-                  isReached ? 'border-[#16a34a]' : 'border-[#cfd6dc]'
+              <div className="relative flex size-12 shrink-0 items-center justify-center">
+                {isActive && (
+                  <div
+                    aria-hidden="true"
+                    className="absolute -inset-2 rounded-full bg-[#16a34a]/15"
+                  />
                 )}
-              >
-                {isReached && <div className="size-4 rounded-[10px] bg-[#16a34a]" />}
+                <div
+                  className={cn(
+                    'relative flex size-12 shrink-0 items-center justify-center rounded-full transition-colors',
+                    isReached ? 'bg-[#16a34a]' : 'border-2 border-[#e2e8f0] bg-white'
+                  )}
+                >
+                  {isCompleted && <Check className="size-5 text-white" strokeWidth={3} />}
+                  {isActive && <div className="size-2.5 rounded-full bg-white" />}
+                  {!isReached && <div className="size-2.5 rounded-full bg-[#cbd5e1]" />}
+                </div>
               </div>
               <span
                 className={cn(
                   'whitespace-nowrap text-base font-semibold',
-                  isReached ? 'text-[#020617]' : 'text-[#cbd5e1]'
+                  isCompleted && 'text-[#020617]',
+                  isActive && 'text-[#16a34a]',
+                  !isReached && 'text-[#94a3b8]'
                 )}
               >
                 {label}
@@ -41,8 +56,8 @@ export default function Stepper({ steps, activeIndex, className }) {
             {index < steps.length - 1 && (
               <div
                 className={cn(
-                  'mt-5 h-[3px] w-24 shrink-0 sm:w-32',
-                  isReached ? 'bg-[#16a34a]' : 'bg-[#cfd6dc]'
+                  'mt-6 h-[3px] w-24 shrink-0 sm:w-32',
+                  isCompleted ? 'bg-[#16a34a]' : 'bg-[#e2e8f0]'
                 )}
               />
             )}

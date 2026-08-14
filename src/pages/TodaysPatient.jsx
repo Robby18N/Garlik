@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import AccountMenu from '@/components/account-menu';
 import {
   Table,
   TableBody,
@@ -209,9 +209,7 @@ export default function TodaysPatient() {
             >
               <Bell className="size-4" />
             </button>
-            <Avatar className="size-[30px]">
-              <AvatarFallback className="bg-green-100 text-green-700">RN</AvatarFallback>
-            </Avatar>
+            <AccountMenu />
           </div>
         </header>
 
