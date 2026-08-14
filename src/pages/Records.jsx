@@ -19,10 +19,12 @@ import {
 } from '@/components/ui/table';
 import AppSidebar from '@/components/app-sidebar';
 import AccountMenu from '@/components/account-menu';
-import StatMiniCard from '@/components/stat-mini-card';
+import { StatCard, DetailHighlightToggle } from '@/components/stat-card';
 import PatientNameHoverCard from '@/components/patient-name-hover-card';
 import PatientDetailSheet from '@/components/patient-detail-sheet';
 import { cn } from '@/lib/utils';
+
+const CATEGORY_DOT = { VVIP: 'bg-amber-500', VIP: 'bg-green-500', Regular: 'bg-slate-400' };
 
 // Master patient records — a persistent roster independent of any single
 // day's schedule (unlike Today's Patient), enriched with the fields the
@@ -243,6 +245,7 @@ export default function Records() {
   const [sortBy, setSortBy] = useState('recent');
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [showDetail, setShowDetail] = useState(false);
 
   function handleViewPatient(patient) {
     setSelectedPatient(patient);
@@ -273,15 +276,31 @@ export default function Records() {
 
   const stats = useMemo(() => {
     const total = RECORDS_PATIENTS.length;
-    const priority = RECORDS_PATIENTS.filter((p) => p.category !== 'Regular').length;
-    const newThisMonth = RECORDS_PATIENTS.filter((p) => {
+    const categoryBreakdown = ['VVIP', 'VIP', 'Regular'].map((category) => ({
+      category,
+      value: RECORDS_PATIENTS.filter((p) => p.category === category).length,
+    }));
+    const priorityList = RECORDS_PATIENTS.filter((p) => p.category !== 'Regular').sort(
+      (a, b) => parseDisplayDate(b.registeredSince) - parseDisplayDate(a.registeredSince)
+    );
+    const newThisMonthList = RECORDS_PATIENTS.filter((p) => {
       const d = new Date(p.registeredSince);
       return d.getFullYear() === 2026 && d.getMonth() === 7; // August 2026
-    }).length;
+    });
     const avgVisits = total
       ? (RECORDS_PATIENTS.reduce((sum, p) => sum + p.totalVisits, 0) / total).toFixed(1)
       : '0';
-    return { total, priority, newThisMonth, avgVisits };
+    const topVisits = [...RECORDS_PATIENTS].sort((a, b) => b.totalVisits - a.totalVisits).slice(0, 5);
+    return {
+      total,
+      priority: priorityList.length,
+      priorityList,
+      categoryBreakdown,
+      newThisMonth: newThisMonthList.length,
+      newThisMonthList,
+      avgVisits,
+      topVisits,
+    };
   }, []);
 
   return (
@@ -315,30 +334,98 @@ export default function Records() {
         </header>
 
         <main className="flex flex-1 flex-col gap-4 p-6">
-          {/* Overview stat row */}
-          <div className="flex w-full items-stretch gap-4">
-            <StatMiniCard
-              icon={<Users className="size-[18px]" />}
-              label="Total Pasien Terdaftar"
-              value={stats.total}
-            />
-            <StatMiniCard
-              icon={<Star className="size-[18px]" />}
-              label="Pasien VIP &amp; VVIP"
-              value={stats.priority}
-            />
-            <StatMiniCard
-              icon={<UserPlus className="size-[18px]" />}
-              label="Pasien Baru Bulan Ini"
-              value={stats.newThisMonth}
-              sub="Agustus 2026"
-            />
-            <StatMiniCard
-              icon={<Repeat2 className="size-[18px]" />}
-              label="Rata-rata Kunjungan"
-              value={stats.avgVisits}
-              sub="per pasien"
-            />
+          {/* Overview stat row — same expandable StatCard format used on
+              Today's Patient, so every page's summary row reads identically. */}
+          <div className="flex w-full flex-col gap-3">
+            <DetailHighlightToggle expanded={showDetail} onToggle={() => setShowDetail((v) => !v)} />
+
+            <div className="flex w-full items-start gap-4">
+              <StatCard
+                icon={<Users className="size-4" />}
+                title="Total Pasien Terdaftar"
+                count={stats.total}
+                showDetail={showDetail}
+              >
+                <div className="grid flex-1 grid-cols-3 gap-2">
+                  {stats.categoryBreakdown.map((item) => (
+                    <div
+                      key={item.category}
+                      className="flex flex-col items-center justify-center gap-1.5 rounded-lg bg-slate-50/60 py-2"
+                    >
+                      <p className="text-xl font-semibold text-slate-800">{item.value}</p>
+                      <div className="flex items-center gap-1">
+                        <span className={cn('size-1.5 rounded-full', CATEGORY_DOT[item.category])} />
+                        <span className="text-[11px] font-medium text-slate-500">{item.category}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </StatCard>
+
+              <StatCard
+                icon={<Star className="size-4" />}
+                title="Pasien VIP & VVIP"
+                count={stats.priority}
+                showDetail={showDetail}
+              >
+                <div className="flex flex-col gap-0.5 overflow-y-auto">
+                  {stats.priorityList.map((p) => (
+                    <div key={p.id} className="flex items-center justify-between gap-2 rounded-md px-1.5 py-1 text-[13px]">
+                      <span className="truncate font-medium text-slate-700">{p.name}</span>
+                      <span
+                        className={cn(
+                          'shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium',
+                          p.category === 'VVIP' ? 'bg-amber-50 text-amber-700' : 'bg-green-50 text-green-700'
+                        )}
+                      >
+                        {p.category}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </StatCard>
+
+              <StatCard
+                icon={<UserPlus className="size-4" />}
+                title="Pasien Baru Bulan Ini"
+                count={stats.newThisMonth}
+                showDetail={showDetail}
+              >
+                {stats.newThisMonthList.length === 0 ? (
+                  <p className="text-[13px] text-slate-400">Belum ada pasien baru bulan ini.</p>
+                ) : (
+                  <div className="flex flex-col gap-0.5 overflow-y-auto">
+                    {stats.newThisMonthList.map((p) => (
+                      <div key={p.id} className="flex items-center justify-between gap-2 rounded-md px-1.5 py-1 text-[13px]">
+                        <span className="truncate font-medium text-slate-700">{p.name}</span>
+                        <span className="shrink-0 text-slate-400">{p.registeredSince}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </StatCard>
+
+              <StatCard
+                icon={<Repeat2 className="size-4" />}
+                title="Rata-rata Kunjungan"
+                count={stats.avgVisits}
+                showDetail={showDetail}
+              >
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                  Kunjungan Terbanyak
+                </p>
+                <div className="flex flex-col gap-0.5 overflow-y-auto">
+                  {stats.topVisits.map((p) => (
+                    <div key={p.id} className="flex items-center justify-between gap-2 rounded-md px-1.5 py-1 text-[13px]">
+                      <span className="truncate font-medium text-slate-700">{p.name}</span>
+                      <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                        {p.totalVisits}x
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </StatCard>
+            </div>
           </div>
 
           <div className="flex flex-col gap-3 rounded-2xl bg-white p-4 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)]">

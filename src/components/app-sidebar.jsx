@@ -31,7 +31,7 @@ const NAV_ITEMS = [
   { icon: FileUser, key: 'records', label: 'Records', path: '/records' },
   { icon: Database, key: 'database', label: 'Database' },
   { icon: BriefcaseMedical, key: 'clinical', label: 'Clinical' },
-  { icon: Activity, key: 'activity', label: 'Activity' },
+  { icon: Activity, key: 'activity', label: 'Activity', path: '/activity' },
   { icon: Banknote, key: 'billing', label: 'Billing' },
   { icon: BellRing, key: 'reminders', label: 'Reminders' },
   { icon: FlaskConical, key: 'labs', label: 'Labs' },
