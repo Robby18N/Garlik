@@ -22,28 +22,28 @@ export default function Stepper({ steps, activeIndex, className }) {
 
         return (
           <div key={label} className="flex items-start">
-            <div className="flex flex-col items-center gap-2 px-3">
-              <div className="relative flex size-12 shrink-0 items-center justify-center">
+            <div className="flex flex-col items-center gap-1.5 px-2">
+              <div className="relative flex size-9 shrink-0 items-center justify-center">
                 {isActive && (
                   <div
                     aria-hidden="true"
-                    className="absolute -inset-2 rounded-full bg-[#16a34a]/15"
+                    className="absolute -inset-1.5 rounded-full bg-[#16a34a]/15"
                   />
                 )}
                 <div
                   className={cn(
-                    'relative flex size-12 shrink-0 items-center justify-center rounded-full transition-colors',
+                    'relative flex size-9 shrink-0 items-center justify-center rounded-full transition-colors',
                     isReached ? 'bg-[#16a34a]' : 'border-2 border-[#e2e8f0] bg-white'
                   )}
                 >
-                  {isCompleted && <Check className="size-5 text-white" strokeWidth={3} />}
-                  {isActive && <div className="size-2.5 rounded-full bg-white" />}
-                  {!isReached && <div className="size-2.5 rounded-full bg-[#cbd5e1]" />}
+                  {isCompleted && <Check className="size-4 text-white" strokeWidth={3} />}
+                  {isActive && <div className="size-2 rounded-full bg-white" />}
+                  {!isReached && <div className="size-2 rounded-full bg-[#cbd5e1]" />}
                 </div>
               </div>
               <span
                 className={cn(
-                  'whitespace-nowrap text-base font-semibold',
+                  'whitespace-nowrap text-sm font-semibold',
                   isCompleted && 'text-[#020617]',
                   isActive && 'text-[#16a34a]',
                   !isReached && 'text-[#94a3b8]'
@@ -56,7 +56,7 @@ export default function Stepper({ steps, activeIndex, className }) {
             {index < steps.length - 1 && (
               <div
                 className={cn(
-                  'mt-6 h-[3px] w-24 shrink-0 sm:w-32',
+                  'mt-[18px] h-[2px] w-16 shrink-0 sm:w-24',
                   isCompleted ? 'bg-[#16a34a]' : 'bg-[#e2e8f0]'
                 )}
               />

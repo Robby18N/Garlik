@@ -263,7 +263,7 @@ export default function Registration() {
               </div>
 
               {/* Stepper — Figma's stepper band sits on a faint dot-grid texture */}
-              <div className="relative flex items-center justify-center overflow-hidden border-b border-[#e2e8f0] py-8">
+              <div className="relative flex items-center justify-center overflow-hidden border-b border-[#e2e8f0] py-6">
                 <div
                   aria-hidden="true"
                   className="absolute inset-0 opacity-[0.35]"
