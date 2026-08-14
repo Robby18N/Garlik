@@ -199,49 +199,47 @@ export default function TodaysPatient() {
           <div className="flex flex-col gap-3 rounded-2xl bg-white p-4 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)]">
             {/* Toolbar row */}
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm font-medium text-slate-500">
+              <p className="text-base font-semibold text-slate-950">
                 Showing {MOCK_PATIENTS.length} of 20 entries
               </p>
 
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="flex flex-wrap items-center gap-4">
                 <div
                   id="search-patient-trigger"
                   onClick={() => setSearchOpen(true)}
                   className="relative w-[300px] max-w-full cursor-pointer"
                 >
-                  <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+                  <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
                   <Input
                     readOnly
                     placeholder="Cari Pasien / ID Patient / Nomor Telp"
-                    className="h-10 cursor-pointer rounded-full border border-slate-200 bg-white pl-9 pr-3 text-sm shadow-none"
+                    className="h-10 cursor-pointer rounded-3xl border border-slate-200 bg-white pl-10 pr-4 text-sm shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)]"
                   />
                 </div>
 
                 <Button
                   onClick={() => navigate('/registration', { state: { flow: 'new-registration' } })}
-                  className="h-10 rounded-full bg-green-600 text-sm font-semibold text-white hover:bg-green-700"
+                  className="h-9 rounded-3xl bg-green-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-green-700"
                 >
                   <Plus className="size-4" />
                   New Registration
                 </Button>
 
-                <Button className="h-10 rounded-full bg-green-600 text-sm font-semibold text-white hover:bg-green-700">
+                <Button className="h-9 rounded-3xl bg-green-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-green-700">
                   <Share2 className="size-4" />
                   Rooms &amp; Labs
                 </Button>
 
-                {/* Today / Tomorrow real switch, matching Figma's Switch component (node 511:5824) */}
-                <div className="flex h-10 items-center gap-2 rounded-full border border-slate-200 bg-white px-3">
-                  <span className={cn('text-sm font-medium', dayFilter === 'Today' ? 'text-slate-900' : 'text-slate-400')}>
-                    Today
-                  </span>
+                {/* Today / Tomorrow toggle, matching Figma node 576:3118 — the switch
+                    track is always blue (#3b82f6) regardless of on/off state. */}
+                <div className="flex h-10 items-center gap-2.5 rounded-full border border-slate-200 bg-white px-4">
+                  <span className="text-sm font-medium text-slate-950">Today</span>
                   <Switch
                     checked={dayFilter === 'Tomorrow'}
                     onCheckedChange={(checked) => setDayFilter(checked ? 'Tomorrow' : 'Today')}
+                    className="data-[state=checked]:bg-[#3b82f6] data-[state=unchecked]:bg-[#3b82f6]"
                   />
-                  <span className={cn('text-sm font-medium', dayFilter === 'Tomorrow' ? 'text-slate-900' : 'text-slate-400')}>
-                    Tomorrow
-                  </span>
+                  <span className="text-sm font-medium text-slate-950">Tomorrow</span>
                 </div>
               </div>
             </div>
