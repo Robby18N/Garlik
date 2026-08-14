@@ -6,6 +6,7 @@ import Login from '@/pages/Login';
 import TodaysPatient from '@/pages/TodaysPatient';
 import Registration from '@/pages/Registration';
 import PageTransition from '@/components/page-transition';
+import { RoleProvider } from '@/context/role-context';
 
 // Every route change (Login ↔ Today's Patient ↔ New Registration) crossfades
 // via <PageTransition> instead of hard-cutting — the "Smart Animate" style
@@ -27,9 +28,11 @@ function AnimatedRoutes() {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <Toaster position="top-right" richColors />
-      <AnimatedRoutes />
-    </BrowserRouter>
+    <RoleProvider>
+      <BrowserRouter>
+        <Toaster position="top-right" richColors />
+        <AnimatedRoutes />
+      </BrowserRouter>
+    </RoleProvider>
   );
 }

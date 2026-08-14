@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronDown, LogOut } from 'lucide-react';
 import { toast } from 'sonner';
@@ -14,15 +13,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-
-const ROLES = ['Receptionist', 'Doctor', 'Admin'];
+import { ROLES, useRole } from '@/context/role-context';
 
 /** Account / role-switcher dropdown for the top header bar: avatar + current
  * role label + chevron trigger, a radio list of the three available
- * roles, and a Logout action at the bottom. */
+ * roles, and a Logout action at the bottom. Role lives in shared context
+ * (see role-context.jsx) so AppSidebar re-renders with the right
+ * hidden/restricted nav items the moment the role changes here. */
 export default function AccountMenu() {
   const navigate = useNavigate();
-  const [role, setRole] = useState('Receptionist');
+  const { role, setRole } = useRole();
 
   function handleLogout() {
     toast.success('Logged out successfully');
