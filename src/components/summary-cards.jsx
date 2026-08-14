@@ -1,8 +1,7 @@
 import { useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronDown, NotebookPen, UsersRound, Users, Plus, X } from 'lucide-react';
 
-import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
   DialogContent,
@@ -25,7 +24,7 @@ import { cn } from '@/lib/utils';
 const DEFAULT_STICKY_NOTES = ['Lantai Licin', 'Ada Lalat', 'Toilet'];
 
 // Per-doctor waiting list, with the patients behind each count so the
-// "N Patient Waiting list" pill can open a detail popup.
+// waiting-list row can open a detail popup.
 const WAITING_BY_DOCTOR = [
   {
     doctor: 'drg. SM',
@@ -58,29 +57,28 @@ const WAITING_BY_DOCTOR = [
 ];
 
 const STATUS_BREAKDOWN = [
-  { label: 'Waiting', value: 19, color: 'orange' },
-  { label: 'Complete', value: 1, color: 'green' },
-  { label: 'Late', value: 2, color: 'purple' },
-  { label: 'Cancel', value: 2, color: 'red' },
+  { label: 'Waiting', value: 19, dot: 'bg-orange-500' },
+  { label: 'Complete', value: 1, dot: 'bg-green-500' },
+  { label: 'Late', value: 2, dot: 'bg-purple-500' },
+  { label: 'Cancel', value: 2, dot: 'bg-red-500' },
 ];
 
-const STATUS_BADGE_CLASS = {
-  orange: 'border-transparent bg-[rgba(249,115,22,0.08)] text-[#f97316]',
-  green: 'border-transparent bg-[rgba(34,197,94,0.08)] text-[#22c55e]',
-  purple: 'border-transparent bg-[rgba(168,85,247,0.08)] text-[#a855f7]',
-  red: 'border-transparent bg-[rgba(239,68,68,0.08)] text-[#ef4444]',
-};
+const CARD_CLASS = 'rounded-xl border border-slate-100 bg-white shadow-[0_1px_2px_0_rgba(0,0,0,0.04)]';
+const ICON_CHIP_CLASS = 'flex size-7 shrink-0 items-center justify-center rounded-lg bg-slate-50 text-slate-500';
+
+const FADE_TRANSITION = { duration: 0.22, ease: [0.4, 0, 0.2, 1] };
 
 /**
  * Top-of-dashboard summary section: three stat cards (Sticky notes,
  * Waiting list, Status Patient) plus a "Show/Hide Detail Highlight"
  * toggle that expands a second row with the breakdown for each card.
  * Matches Figma nodes 583:4311 (Show/collapsed) and 583:4583
- * (Hide/expanded). Manages its own expand/collapse state — no props
- * required.
+ * (Hide/expanded), redrawn with a flatter, more minimal visual style.
+ * Toggling crossfades the two states and smoothly animates the
+ * container's height (Smart-Animate style) instead of hard-swapping.
  *
  * Sticky notes is a free-text mini notes list (add/edit/delete, kept in
- * local state). Waiting list's per-doctor pill opens a popup with the
+ * local state). Waiting list's per-doctor row opens a popup with the
  * actual patients (name + wait time) behind that doctor's count.
  */
 export default function SummaryCards() {
@@ -111,128 +109,168 @@ export default function SummaryCards() {
       <button
         type="button"
         onClick={() => setShowDetail((v) => !v)}
-        className="flex items-center gap-2 self-end text-sm font-medium text-[#3b82f6] hover:underline"
+        className="flex items-center gap-1.5 self-end text-sm font-medium text-[#3b82f6] hover:underline"
       >
         {showDetail ? 'Hide Detail Highlight' : 'Show Detail Highlight'}
-        <ChevronDown className={cn('size-6 transition-transform', showDetail && 'rotate-180')} />
+        <ChevronDown className={cn('size-4 transition-transform duration-200', showDetail && 'rotate-180')} />
       </button>
 
-      {!showDetail && (
-        <div className="flex w-full items-center justify-center gap-4">
-          <Card className="h-[42px] w-[438px] shrink-0 flex-row items-center justify-start gap-2 rounded-[10px] border-slate-200 px-5 py-0 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)]">
-            <NotebookPen className="size-5 text-slate-700" />
-            <p className="text-sm font-semibold text-[#020617]">
-              Sticky notes <span className="text-[#16a34a]">({notes.length})</span>
-            </p>
-          </Card>
-          <Card className="h-[42px] flex-1 flex-row items-center justify-start gap-2 rounded-[10px] border-slate-200 px-5 py-0 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)]">
-            <UsersRound className="size-5 text-slate-700" />
-            <p className="text-sm font-semibold text-[#020617]">
-              Waiting list <span className="text-[#16a34a]">({totalWaiting})</span>
-            </p>
-          </Card>
-          <Card className="h-[42px] flex-1 flex-row items-center justify-start gap-2 rounded-[10px] border-slate-200 px-5 py-0 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)]">
-            <Users className="size-5 text-slate-700" />
-            <p className="text-sm font-semibold text-[#020617]">
-              Status Patient <span className="text-[#15803d]">(30)</span>
-            </p>
-          </Card>
-        </div>
-      )}
-
-      {showDetail && (
-        <div className="flex w-full items-stretch gap-4">
-          {/* Sticky notes detail — free-text notes: type to add, click a
-              note to edit in place, hover to reveal a delete button. */}
-          <Card className="h-[144px] flex-1 gap-2 overflow-y-auto rounded-[10px] border-slate-200 px-4 py-5 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)]">
-            <div className="flex items-center gap-2">
-              <NotebookPen className="size-6 text-slate-700" />
-              <p className="text-sm font-semibold text-[#020617]">Sticky notes</p>
-            </div>
-            <div className="flex flex-col gap-1">
-              {notes.map((note, index) => (
-                <div key={index} className="group flex items-center gap-1.5">
-                  <span className="text-[#020617]">•</span>
-                  <input
-                    value={note}
-                    onChange={(e) => updateNote(index, e.target.value)}
-                    className="w-full min-w-0 rounded border border-transparent bg-transparent text-[13px] tracking-wide text-[#020617] outline-none hover:border-slate-200 focus:border-slate-300 focus:bg-white"
-                  />
-                  <button
-                    type="button"
-                    aria-label={`Hapus catatan ${note}`}
-                    onClick={() => removeNote(index)}
-                    className="shrink-0 text-slate-300 opacity-0 hover:text-slate-500 group-hover:opacity-100"
-                  >
-                    <X className="size-3.5" />
-                  </button>
+      {/* `layout` lets Framer Motion smoothly animate this wrapper's height
+          as its content switches, instead of the table below jump-cutting
+          up or down. `popLayout` removes the exiting branch from flow
+          immediately so the height animation and the crossfade run
+          together rather than the height waiting for the fade to finish. */}
+      <motion.div layout transition={FADE_TRANSITION}>
+        <AnimatePresence mode="popLayout" initial={false}>
+          {!showDetail ? (
+            <motion.div
+              key="collapsed"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={FADE_TRANSITION}
+              className="flex w-full items-center justify-center gap-4"
+            >
+              <div className={cn(CARD_CLASS, 'flex h-11 flex-1 items-center gap-2.5 px-4')}>
+                <div className={ICON_CHIP_CLASS}>
+                  <NotebookPen className="size-4" />
                 </div>
-              ))}
-              <div className="flex items-center gap-1.5">
-                <Plus className="size-3.5 shrink-0 text-slate-400" />
-                <input
-                  value={newNote}
-                  onChange={(e) => setNewNote(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      addNote();
-                    }
-                  }}
-                  onBlur={addNote}
-                  placeholder="Tambah catatan..."
-                  className="w-full min-w-0 rounded border border-transparent bg-transparent text-[13px] tracking-wide text-[#020617] outline-none placeholder:text-slate-400 hover:border-slate-200 focus:border-slate-300 focus:bg-white"
-                />
+                <p className="text-sm font-medium text-slate-700">Sticky notes</p>
+                <span className="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
+                  {notes.length}
+                </span>
               </div>
-            </div>
-          </Card>
-
-          {/* Waiting list detail — each pill opens a popup listing the
-              actual patients (name + wait time) behind that count. */}
-          <Card className="h-[144px] flex-1 gap-2 overflow-y-auto rounded-[10px] border-slate-200 px-4 py-5 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)]">
-            <div className="flex items-center gap-2">
-              <UsersRound className="size-6 text-slate-700" />
-              <p className="text-sm font-semibold text-[#020617]">Waiting list</p>
-            </div>
-            <div className="flex flex-col gap-2">
-              {WAITING_BY_DOCTOR.map((item) => (
-                <button
-                  key={item.doctor}
-                  type="button"
-                  onClick={() => setActiveDoctor(item.doctor)}
-                  className="flex items-center justify-between gap-[3px] rounded-2xl border border-slate-200 bg-gradient-to-r from-white to-amber-50 px-3 py-2 text-xs hover:border-slate-300"
-                >
-                  <p className="text-[#020617]">{item.doctor}</p>
-                  <p className="font-semibold text-black">
-                    {item.patients.length} Patient Waiting list
-                  </p>
-                </button>
-              ))}
-            </div>
-          </Card>
-
-          {/* Status patient detail */}
-          <Card className="h-[144px] flex-1 justify-between gap-4 rounded-[10px] border-slate-200 px-4 py-5 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)]">
-            <div className="flex items-center gap-2">
-              <Users className="size-6 text-slate-700" />
-              <p className="text-sm font-semibold text-[#020617]">Status Patient</p>
-            </div>
-            <div className="flex items-start">
-              {STATUS_BREAKDOWN.map((item) => (
-                <div
-                  key={item.label}
-                  className="flex flex-1 flex-col items-center justify-center gap-1 border-r border-slate-200 px-2 first:border-l"
-                >
-                  <p className="text-2xl font-semibold tracking-tight text-[#171717]">{item.value}</p>
-                  <Badge className={cn('rounded-full px-2.5 py-0.5', STATUS_BADGE_CLASS[item.color])}>
-                    {item.label}
-                  </Badge>
+              <div className={cn(CARD_CLASS, 'flex h-11 flex-1 items-center gap-2.5 px-4')}>
+                <div className={ICON_CHIP_CLASS}>
+                  <UsersRound className="size-4" />
                 </div>
-              ))}
-            </div>
-          </Card>
-        </div>
-      )}
+                <p className="text-sm font-medium text-slate-700">Waiting list</p>
+                <span className="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
+                  {totalWaiting}
+                </span>
+              </div>
+              <div className={cn(CARD_CLASS, 'flex h-11 flex-1 items-center gap-2.5 px-4')}>
+                <div className={ICON_CHIP_CLASS}>
+                  <Users className="size-4" />
+                </div>
+                <p className="text-sm font-medium text-slate-700">Status Patient</p>
+                <span className="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
+                  30
+                </span>
+              </div>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="expanded"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={FADE_TRANSITION}
+              className="flex w-full items-stretch gap-4"
+            >
+              {/* Sticky notes detail — free-text notes: type to add, click a
+                  note to edit in place, hover to reveal a delete button. */}
+              <div className={cn(CARD_CLASS, 'flex min-h-[150px] flex-1 flex-col gap-3 p-4')}>
+                <div className="flex items-center gap-2">
+                  <div className={ICON_CHIP_CLASS}>
+                    <NotebookPen className="size-4" />
+                  </div>
+                  <p className="text-sm font-semibold text-slate-800">Sticky notes</p>
+                </div>
+                <div className="flex flex-col gap-0.5 overflow-y-auto">
+                  {notes.map((note, index) => (
+                    <div
+                      key={index}
+                      className="group flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-slate-50"
+                    >
+                      <span className="size-1 shrink-0 rounded-full bg-slate-300" />
+                      <input
+                        value={note}
+                        onChange={(e) => updateNote(index, e.target.value)}
+                        className="w-full min-w-0 rounded border border-transparent bg-transparent text-[13px] text-slate-700 outline-none focus:border-slate-200 focus:bg-white"
+                      />
+                      <button
+                        type="button"
+                        aria-label={`Hapus catatan ${note}`}
+                        onClick={() => removeNote(index)}
+                        className="shrink-0 text-slate-300 opacity-0 hover:text-slate-500 group-hover:opacity-100"
+                      >
+                        <X className="size-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                  <div className="flex items-center gap-2 rounded-md px-1.5 py-1">
+                    <Plus className="size-3 shrink-0 text-slate-400" />
+                    <input
+                      value={newNote}
+                      onChange={(e) => setNewNote(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          addNote();
+                        }
+                      }}
+                      onBlur={addNote}
+                      placeholder="Tambah catatan..."
+                      className="w-full min-w-0 rounded border border-transparent bg-transparent text-[13px] text-slate-700 outline-none placeholder:text-slate-400 focus:border-slate-200 focus:bg-white"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Waiting list detail — each row opens a popup listing the
+                  actual patients (name + wait time) behind that count. */}
+              <div className={cn(CARD_CLASS, 'flex min-h-[150px] flex-1 flex-col gap-3 p-4')}>
+                <div className="flex items-center gap-2">
+                  <div className={ICON_CHIP_CLASS}>
+                    <UsersRound className="size-4" />
+                  </div>
+                  <p className="text-sm font-semibold text-slate-800">Waiting list</p>
+                </div>
+                <div className="flex flex-col gap-1.5 overflow-y-auto">
+                  {WAITING_BY_DOCTOR.map((item) => (
+                    <button
+                      key={item.doctor}
+                      type="button"
+                      onClick={() => setActiveDoctor(item.doctor)}
+                      className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-1.5 text-xs transition-colors hover:border-slate-200 hover:bg-slate-50"
+                    >
+                      <span className="font-medium text-slate-700">{item.doctor}</span>
+                      <span className="rounded-full bg-white px-2 py-0.5 font-semibold text-slate-600 ring-1 ring-slate-200">
+                        {item.patients.length} waiting
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Status patient detail */}
+              <div className={cn(CARD_CLASS, 'flex min-h-[150px] flex-1 flex-col gap-3 p-4')}>
+                <div className="flex items-center gap-2">
+                  <div className={ICON_CHIP_CLASS}>
+                    <Users className="size-4" />
+                  </div>
+                  <p className="text-sm font-semibold text-slate-800">Status Patient</p>
+                </div>
+                <div className="grid flex-1 grid-cols-4 gap-2">
+                  {STATUS_BREAKDOWN.map((item) => (
+                    <div
+                      key={item.label}
+                      className="flex flex-col items-center justify-center gap-1.5 rounded-lg bg-slate-50/60 py-2"
+                    >
+                      <p className="text-xl font-semibold text-slate-800">{item.value}</p>
+                      <div className="flex items-center gap-1">
+                        <span className={cn('size-1.5 rounded-full', item.dot)} />
+                        <span className="text-[11px] font-medium text-slate-500">{item.label}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
 
       {/* Waiting list detail popup */}
       <Dialog open={!!activeDoctor} onOpenChange={(open) => !open && setActiveDoctor(null)}>
