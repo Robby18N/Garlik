@@ -65,20 +65,25 @@ const MOCK_PATIENTS = [
 // Tomorrow's schedule — a different set of booked patients. None of these
 // appointments have happened yet, so there is no Complete/Late/Waiting
 // status to show; the Status column renders "-" for every row instead
-// (handled in the Status cell below, keyed off `dayFilter`).
+// (handled in the Status cell below, keyed off `dayFilter`). Room and Lab
+// haven't been assigned yet either, so both are seeded as "-" directly in
+// the mock data. Remark is seeded as "-" too, but — unlike Room/Lab — it
+// stays a free-text field (the Remark textarea below is always editable,
+// for both Today and Tomorrow), so staff can still type a note in ahead
+// of the appointment.
 const MOCK_PATIENTS_TOMORROW = [
-  { id: 101, mr: 2, appt: '08:00', name: 'Hendra Gunawan', category: 'Regular', dokter: 'drg. SM', room: 'R1', keluhan: 'Kontrol Kawat Gigi', durasi: '30 Min', status: null, lab: 'OK', remark: 'Jadwal kontrol rutin', phone: '0852-5737-6191'  },
-  { id: 102, mr: 1, appt: '08:30', name: 'Melati Suryani', category: 'VIP', dokter: 'drg. AN', room: 'R2', keluhan: 'Cabut Gigi Bungsu', durasi: '90 Min', status: null, lab: 'OK', remark: 'Pasien minta anestesi ringan', phone: '0895-5774-6282'  },
-  { id: 103, mr: 2, appt: '09:00', name: 'Bayu Kusnandar', category: 'Regular', dokter: 'drg. RF', room: 'R3', keluhan: 'Gigi Berlubang', durasi: '45 Min', status: null, lab: 'NOK', remark: 'Perlu rontgen dulu', phone: '0896-5811-6373'  },
-  { id: 104, mr: 3, appt: '09:30', name: 'Citra Dewanti', category: 'VVIP', dokter: 'drg. SM', room: 'R1', keluhan: 'Whitening', durasi: '90 Min', status: null, lab: 'OK', remark: 'Booking dari kemarin', phone: '0812-5848-6464'  },
-  { id: 105, mr: 2, appt: '10:00', name: 'Doni Firmansyah', category: 'Regular', dokter: 'drg. AN', room: 'R2', keluhan: 'Scaling', durasi: '45 Min', status: null, lab: 'OK', remark: 'Pasien baru', phone: '0813-5885-6555'  },
-  { id: 106, mr: 2, appt: '10:30', name: 'Eka Purnama', category: 'Regular', dokter: 'drg. RF', room: 'R3', keluhan: 'Sakit Gusi', durasi: '30 Min', status: null, lab: 'OK', remark: 'Pasien Kondusif', phone: '0821-5922-6646'  },
-  { id: 107, mr: 2, appt: '11:00', name: 'Galih Prasetyo', category: 'Regular', dokter: 'drg. SM', room: 'R1', keluhan: 'Tambal Gigi', durasi: '45 Min', status: null, lab: 'OK', remark: 'Reschedule dari minggu lalu', phone: '0822-5959-6737'  },
-  { id: 108, mr: 2, appt: '11:30', name: 'Herlina Wati', category: 'VIP', dokter: 'drg. AN', room: 'R2', keluhan: 'Konsultasi Behel', durasi: '30 Min', status: null, lab: 'OK', remark: 'Konsultasi pertama', phone: '0851-5996-6828'  },
-  { id: 109, mr: 2, appt: '13:00', name: 'Indra Gunawan', category: 'Regular', dokter: 'drg. RF', room: 'R3', keluhan: 'Gigi Ngilu', durasi: '45 Min', status: null, lab: 'OK', remark: 'Pasien Kondusif', phone: '0852-6033-6919'  },
-  { id: 110, mr: 2, appt: '13:30', name: 'Jasmine Anggraini', category: 'Regular', dokter: 'drg. SM', room: 'R1', keluhan: 'Karang Gigi', durasi: '45 Min', status: null, lab: 'OK', remark: 'Pasien Kondusif', phone: '0895-6070-7010'  },
-  { id: 111, mr: 2, appt: '14:00', name: 'Krisna Ardiansyah', category: 'Regular', dokter: 'drg. AN', room: 'R2', keluhan: 'Cabut Gigi', durasi: '60 Min', status: null, lab: 'NOK', remark: 'Perlu rontgen dulu', phone: '0896-6107-7101'  },
-  { id: 112, mr: 2, appt: '14:30', name: 'Lestari Handayani', category: 'Regular', dokter: 'drg. RF', room: 'R3', keluhan: 'Sakit Gigi', durasi: '60 Min', status: null, lab: 'OK', remark: 'Pasien Kondusif', phone: '0812-6144-7192'  },
+  { id: 101, mr: 2, appt: '08:00', name: 'Hendra Gunawan', category: 'Regular', dokter: 'drg. SM', room: '-', keluhan: 'Kontrol Kawat Gigi', durasi: '30 Min', status: null, lab: '-', remark: '-', phone: '0852-5737-6191'  },
+  { id: 102, mr: 1, appt: '08:30', name: 'Melati Suryani', category: 'VIP', dokter: 'drg. AN', room: '-', keluhan: 'Cabut Gigi Bungsu', durasi: '90 Min', status: null, lab: '-', remark: '-', phone: '0895-5774-6282'  },
+  { id: 103, mr: 2, appt: '09:00', name: 'Bayu Kusnandar', category: 'Regular', dokter: 'drg. RF', room: '-', keluhan: 'Gigi Berlubang', durasi: '45 Min', status: null, lab: '-', remark: '-', phone: '0896-5811-6373'  },
+  { id: 104, mr: 3, appt: '09:30', name: 'Citra Dewanti', category: 'VVIP', dokter: 'drg. SM', room: '-', keluhan: 'Whitening', durasi: '90 Min', status: null, lab: '-', remark: '-', phone: '0812-5848-6464'  },
+  { id: 105, mr: 2, appt: '10:00', name: 'Doni Firmansyah', category: 'Regular', dokter: 'drg. AN', room: '-', keluhan: 'Scaling', durasi: '45 Min', status: null, lab: '-', remark: '-', phone: '0813-5885-6555'  },
+  { id: 106, mr: 2, appt: '10:30', name: 'Eka Purnama', category: 'Regular', dokter: 'drg. RF', room: '-', keluhan: 'Sakit Gusi', durasi: '30 Min', status: null, lab: '-', remark: '-', phone: '0821-5922-6646'  },
+  { id: 107, mr: 2, appt: '11:00', name: 'Galih Prasetyo', category: 'Regular', dokter: 'drg. SM', room: '-', keluhan: 'Tambal Gigi', durasi: '45 Min', status: null, lab: '-', remark: '-', phone: '0822-5959-6737'  },
+  { id: 108, mr: 2, appt: '11:30', name: 'Herlina Wati', category: 'VIP', dokter: 'drg. AN', room: '-', keluhan: 'Konsultasi Behel', durasi: '30 Min', status: null, lab: '-', remark: '-', phone: '0851-5996-6828'  },
+  { id: 109, mr: 2, appt: '13:00', name: 'Indra Gunawan', category: 'Regular', dokter: 'drg. RF', room: '-', keluhan: 'Gigi Ngilu', durasi: '45 Min', status: null, lab: '-', remark: '-', phone: '0852-6033-6919'  },
+  { id: 110, mr: 2, appt: '13:30', name: 'Jasmine Anggraini', category: 'Regular', dokter: 'drg. SM', room: '-', keluhan: 'Karang Gigi', durasi: '45 Min', status: null, lab: '-', remark: '-', phone: '0895-6070-7010'  },
+  { id: 111, mr: 2, appt: '14:00', name: 'Krisna Ardiansyah', category: 'Regular', dokter: 'drg. AN', room: '-', keluhan: 'Cabut Gigi', durasi: '60 Min', status: null, lab: '-', remark: '-', phone: '0896-6107-7101'  },
+  { id: 112, mr: 2, appt: '14:30', name: 'Lestari Handayani', category: 'Regular', dokter: 'drg. RF', room: '-', keluhan: 'Sakit Gigi', durasi: '60 Min', status: null, lab: '-', remark: '-', phone: '0812-6144-7192'  },
 ];
 
 // Column widths as percentages of the table, proportional to Figma node
