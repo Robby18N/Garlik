@@ -40,7 +40,12 @@ export default function AccountMenu() {
 
   function handleSelectAccount(username) {
     const next = ACCOUNTS.find((a) => a.username === username);
-    if (next) applyAccount(next);
+    if (!next) return;
+    applyAccount(next);
+    // Whatever page was open (e.g. Billing) may not be on the new account's
+    // allowed menu list — always land on Today's Patient after a switch so
+    // the visible content never outpaces the sidebar's access change.
+    navigate('/patients');
   }
 
   function handleLogout() {
