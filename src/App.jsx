@@ -13,6 +13,7 @@ import Reminders from '@/pages/Reminders';
 import Dashboard from '@/pages/Dashboard';
 import Schedule from '@/pages/Schedule';
 import Prescription from '@/pages/Prescription';
+import Database from '@/pages/Database';
 import PageTransition from '@/components/page-transition';
 import { RoleProvider, useRole } from '@/context/role-context';
 import { PatientStatusProvider } from '@/context/patient-status-context';
@@ -133,6 +134,16 @@ function AnimatedRoutes() {
             <PageTransition>
               <RequireAuth>
                 <Prescription />
+              </RequireAuth>
+            </PageTransition>
+          }
+        />
+        <Route
+          path="/database"
+          element={
+            <PageTransition>
+              <RequireAuth>
+                <Database />
               </RequireAuth>
             </PageTransition>
           }

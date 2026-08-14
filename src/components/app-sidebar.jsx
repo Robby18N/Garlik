@@ -35,7 +35,7 @@ const NAV_ITEMS = [
   { icon: FileUser, key: 'records', label: 'Records', path: '/records' },
   { icon: CalendarDays, key: 'schedule', label: 'Jadwal Praktik', path: '/schedule' },
   { icon: Pill, key: 'prescription', label: 'E-Resep', path: '/resep' },
-  { icon: Database, key: 'database', label: 'Database' },
+  { icon: Database, key: 'database', label: 'Database', path: '/database' },
   { icon: BriefcaseMedical, key: 'clinical', label: 'Clinical' },
   { icon: Activity, key: 'activity', label: 'Activity', path: '/activity' },
   { icon: Banknote, key: 'billing', label: 'Billing', path: '/billing' },
