@@ -20,6 +20,7 @@ import { Switch } from '@/components/ui/switch';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Dialog,
@@ -55,6 +56,7 @@ import MrCheckIcon from '@/components/mr-check-icon';
 import TodaysPatientSkeleton from '@/components/todays-patient-skeleton';
 import roomsLabsIcon from '@/assets/rooms-labs-icon.png';
 import { useRole } from '@/context/role-context';
+import { usePatientStatus } from '@/context/patient-status-context';
 import { cn } from '@/lib/utils';
 
 const STATUS_STYLES = {
@@ -331,9 +333,12 @@ export default function TodaysPatient() {
   // Complete / how long someone's been Waiting), Receptionist handles the
   // front-desk side (Late / Cancel). Admin keeps the full set. Options
   // outside a role's own set still render (so the pill always shows the
-  // right label/color) but are disabled so they can't be picked. Keyed by
-  // patient id so it survives sorting/filtering.
-  const [statusOverrides, setStatusOverrides] = useState({});
+  // right label/color) but are disabled so they can't be picked.
+  //
+  // This lives in shared context (not local state) because Billing needs
+  // to react to it too — a patient marked Complete here has to surface
+  // their still-unpaid invoice at the top of Billing right away.
+  const { statusOverrides, setStatus } = usePatientStatus();
   const allowedStatusOptions = isDoctor
     ? STATUS_OPTIONS.filter((option) => option !== 'Late' && option !== 'Cancel')
     : isReceptionist
@@ -347,7 +352,7 @@ export default function TodaysPatient() {
   const [cleaningDialog, setCleaningDialog] = useState(null);
 
   function applyStatusChange(patient, nextStatus) {
-    setStatusOverrides((prev) => ({ ...prev, [patient.id]: nextStatus }));
+    setStatus(patient.id, nextStatus);
     toast.success(`Status ${patient.name} diperbarui ke "${nextStatus}"`);
   }
 
@@ -362,7 +367,7 @@ export default function TodaysPatient() {
   function handleConfirmRoomReady() {
     if (!cleaningDialog) return;
     const { patient } = cleaningDialog;
-    setStatusOverrides((prev) => ({ ...prev, [patient.id]: 'Complete' }));
+    setStatus(patient.id, 'Complete');
     toast.success(`${patient.name} selesai ditangani — Ruangan ${patient.room} siap digunakan`);
     setCleaningDialog(null);
   }
@@ -712,6 +717,18 @@ export default function TodaysPatient() {
                           // Tomorrow's not-yet-happened rows have no status
                           // at all yet — nothing to show or edit.
                           if (!currentStatus) return <span className="text-[#94a3b8]">-</span>;
+                          // Once a doctor marks a patient Complete, the
+                          // front desk can't reopen it — a finished
+                          // clinical outcome shouldn't be walked back from
+                          // Receptionist, so their cell locks to a
+                          // read-only pill from this point on.
+                          if (isReceptionist && currentStatus === 'Complete') {
+                            return (
+                              <Badge className={cn('rounded-full px-2.5 py-1', STATUS_STYLES[currentStatus])}>
+                                {currentStatus}
+                              </Badge>
+                            );
+                          }
                           return (
                             <Select
                               value={currentStatus}

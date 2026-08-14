@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
-import { Moon, Bell, Search, X, Eye, Receipt, CheckCircle2, AlertCircle, Wallet } from 'lucide-react';
+import { Moon, Bell, Search, X, Eye, Receipt, CheckCircle2, AlertCircle, Wallet, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
+import { usePatientStatus } from '@/context/patient-status-context';
 
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -68,7 +69,21 @@ const COL_WIDTH = {
 
 const HEADER_CLASS = 'h-auto whitespace-nowrap bg-[#f0fdf4] px-3 py-4 font-bold text-[#15803d]';
 
+// Invoice `mrn` values are the same "P-0001"-style patient id used across
+// Today's Patient (search, remark threads, etc) — parsing the number back
+// out is how an invoice here gets matched up to that patient's live
+// clinical status.
+function patientIdFromMrn(mrn) {
+  const num = parseInt(String(mrn ?? '').replace('P-', ''), 10);
+  return Number.isNaN(num) ? null : num;
+}
+
 export default function Billing() {
+  // Live per-patient clinical status, shared with Today's Patient — used
+  // here purely to detect "just marked Complete by the doctor, still
+  // unpaid" invoices so they can be surfaced at the top of the list.
+  const { statusOverrides, completedOrder } = usePatientStatus();
+
   const [invoices, setInvoices] = useState(BILLING_INVOICES_INITIAL);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('Semua');
@@ -102,13 +117,43 @@ export default function Billing() {
   }
 
   const invoicesWithTotal = useMemo(
-    () => invoices.map((inv) => ({ ...inv, total: inv.items.reduce((sum, item) => sum + item.price, 0) })),
-    [invoices]
+    () =>
+      invoices.map((inv) => {
+        const patientId = patientIdFromMrn(inv.mrn);
+        // "Baru selesai & belum bayar" — the doctor just marked this
+        // patient's treatment Complete on Today's Patient and there's
+        // still nothing paid on their invoice, so front desk needs to see
+        // it first to go collect payment.
+        const justCompleted =
+          patientId != null && statusOverrides[patientId] === 'Complete' && inv.status === 'Unpaid';
+        return {
+          ...inv,
+          total: inv.items.reduce((sum, item) => sum + item.price, 0),
+          justCompleted,
+          completedRank: patientId != null ? (completedOrder[patientId] ?? 0) : 0,
+        };
+      }),
+    [invoices, statusOverrides, completedOrder]
+  );
+
+  // Newest "just completed & unpaid" invoices float to the very top (most
+  // recent completion first); everything else keeps its original relative
+  // order — Array.prototype.sort is stable, so returning 0 below preserves
+  // it rather than reshuffling the rest of the list.
+  const sortedInvoices = useMemo(
+    () =>
+      [...invoicesWithTotal].sort((a, b) => {
+        if (a.justCompleted && !b.justCompleted) return -1;
+        if (!a.justCompleted && b.justCompleted) return 1;
+        if (a.justCompleted && b.justCompleted) return b.completedRank - a.completedRank;
+        return 0;
+      }),
+    [invoicesWithTotal]
   );
 
   const visibleInvoices = useMemo(() => {
     const trimmed = query.trim().toLowerCase();
-    return invoicesWithTotal.filter((inv) => {
+    return sortedInvoices.filter((inv) => {
       const matchesQuery =
         !trimmed ||
         inv.patientName.toLowerCase().includes(trimmed) ||
@@ -116,7 +161,7 @@ export default function Billing() {
       const matchesStatus = statusFilter === 'Semua' || inv.status === statusFilter;
       return matchesQuery && matchesStatus;
     });
-  }, [invoicesWithTotal, query, statusFilter]);
+  }, [sortedInvoices, query, statusFilter]);
 
   const stats = useMemo(() => {
     const total = invoicesWithTotal.length;
@@ -322,12 +367,27 @@ export default function Billing() {
                   {visibleInvoices.map((inv, index) => (
                     <TableRow
                       key={inv.id}
-                      className={cn('border-b border-[#e2e8f0]', index % 2 === 1 && 'bg-[#f8fafc]')}
+                      className={cn(
+                        'border-b border-[#e2e8f0]',
+                        index % 2 === 1 && 'bg-[#f8fafc]',
+                        // Just-completed-and-unpaid rows get a subtle green
+                        // left rail so they read as newly surfaced, not
+                        // just "happens to be first".
+                        inv.justCompleted && 'border-l-2 border-l-[#16a34a] bg-[rgba(34,197,94,0.04)]'
+                      )}
                     >
                       <TableCell className="!align-middle py-3 text-left text-[#334155]">{index + 1}</TableCell>
                       <TableCell className="!align-middle py-3 text-left text-[#334155]">{inv.invoiceNo}</TableCell>
                       <TableCell className="!align-middle py-3 text-left">
-                        <PatientNameHoverCard name={inv.patientName} category="Regular" />
+                        <div className="flex items-center gap-2">
+                          <PatientNameHoverCard name={inv.patientName} category="Regular" />
+                          {inv.justCompleted && (
+                            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[rgba(34,197,94,0.08)] px-2 py-0.5 text-[11px] font-semibold text-[#16a34a]">
+                              <Sparkles className="size-3" />
+                              Baru Selesai
+                            </span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="!align-middle py-3 text-left text-[#334155]">
                         {inv.items.map((item) => item.name).join(', ')}

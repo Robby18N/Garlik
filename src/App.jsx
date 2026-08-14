@@ -12,6 +12,7 @@ import Billing from '@/pages/Billing';
 import Reminders from '@/pages/Reminders';
 import PageTransition from '@/components/page-transition';
 import { RoleProvider, useRole } from '@/context/role-context';
+import { PatientStatusProvider } from '@/context/patient-status-context';
 
 // Gate for every screen except Login: bounce back to "/" when there's no
 // authenticated account yet (fresh load, or after Logout), so the app can't
@@ -111,10 +112,12 @@ function AnimatedRoutes() {
 export default function App() {
   return (
     <RoleProvider>
-      <BrowserRouter>
-        <Toaster position="top-right" richColors />
-        <AnimatedRoutes />
-      </BrowserRouter>
+      <PatientStatusProvider>
+        <BrowserRouter>
+          <Toaster position="top-right" richColors />
+          <AnimatedRoutes />
+        </BrowserRouter>
+      </PatientStatusProvider>
     </RoleProvider>
   );
 }
