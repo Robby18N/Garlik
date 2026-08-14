@@ -114,3 +114,40 @@
     font-family: var(--font-sans);
   }
 }
+
+/* Global click feedback — every clickable action (buttons, icon buttons,
+   toggles, links) gets a quick, consistent "press" animation on click so
+   the UI always confirms a tap/click was registered. Centralized here
+   instead of per-component so new buttons automatically inherit it. */
+@layer base {
+  button:not(:disabled),
+  a[href],
+  [role='button']:not([aria-disabled='true']) {
+    transition:
+      transform 120ms cubic-bezier(0.4, 0, 0.2, 1),
+      background-color 150ms ease,
+      opacity 150ms ease,
+      box-shadow 150ms ease;
+  }
+
+  button:not(:disabled):active,
+  a[href]:active,
+  [role='button']:not([aria-disabled='true']):active {
+    transform: scale(0.94);
+  }
+
+  /* Radix Switch's root is itself a button; scaling it would visually
+     clash with its own thumb-slide animation, so it gets a lighter touch. */
+  button[role='switch']:not(:disabled):active {
+    transform: scale(0.97);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button:not(:disabled):active,
+  a[href]:active,
+  [role='button']:not([aria-disabled='true']):active,
+  button[role='switch']:not(:disabled):active {
+    transform: none;
+  }
+}

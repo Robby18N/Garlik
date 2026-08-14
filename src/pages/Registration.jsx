@@ -1,24 +1,41 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Check, Upload, Moon, Bell } from 'lucide-react';
+import { ArrowLeft, Upload, Moon, Bell, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import AppSidebar from '@/components/app-sidebar';
-import { cn } from '@/lib/utils';
+import Stepper from '@/components/stepper';
+import {
+  TextField,
+  SelectField,
+  DateField,
+  UploadField,
+  SectionHeader,
+} from '@/components/form-fields';
 
 const STEPS = ['Input Data Patient', 'Medical Record'];
 
+// Kept identical to the values used across the Today's Patient table so a
+// registration made here (name/category/doctor/room/duration) is never out
+// of sync with what the table can display.
 const PATIENT_CATEGORIES = ['Regular', 'VIP', 'VVIP'];
+const DOCTORS = ['drg. SM', 'drg. AN', 'drg. RF'];
+const ROOMS = ['R1', 'R2', 'R3'];
+const DURATIONS = ['30 Min', '45 Min', '60 Min', '90 Min'];
+
+const TITLES = ['Mr', 'Mrs', 'Ms', 'Dr'];
+const SEXES = ['Male', 'Female'];
+const COUNTRIES = ['Indonesia'];
+const PROVINCES = ['DKI Jakarta', 'Jawa Barat', 'Jawa Tengah', 'Jawa Timur', 'Banten'];
+const CITIES = ['Jakarta Selatan', 'Jakarta Pusat', 'Jakarta Barat', 'Jakarta Timur', 'Jakarta Utara'];
+const DISTRICTS = ['Kebayoran Baru', 'Tebet', 'Setiabudi', 'Mampang Prapatan'];
+const SUB_DISTRICTS = ['Senayan', 'Gunung', 'Melawai', 'Pulo'];
+const FIND_US_OPTIONS = ['Social Media', 'Friend/Family Referral', 'Google Search', 'Walk-in', 'Advertisement'];
+const RELATIVE_OPTIONS = ['None', 'Spouse', 'Parent', 'Child', 'Sibling', 'Other'];
 
 const BLOOD_TYPES = ['A', 'AB', 'O'];
 
@@ -47,15 +64,41 @@ const CONDITION_FIELDS = [
 ];
 
 const initialPatientData = {
-  fullName: '',
-  phone: '',
+  title: '',
+  firstName: '',
+  lastName: '',
+  nickname: '',
+  birthPlace: '',
+  birthDate: '',
+  sex: '',
+  religion: '',
+  hobby: '',
+  occupation: '',
+  idCardPhotoName: '',
+  idCardNumber: '',
+  phone1: '',
+  phone2: '',
+  emergencyContactName: '',
+  emergencyContactPhone: '',
   email: '',
-  nik: '',
-  dateOfBirth: '',
-  gender: '',
-  address: '',
+  street: '',
+  country: '',
+  province: '',
+  city: '',
+  district: '',
+  subDistrict: '',
   category: '',
+  membershipNumber: '',
+  howDidYouFindUs: '',
+  relatives: '',
+  // Appointment fields — only surfaced for the "make appointment" flow, but
+  // these are exactly the fields Today's Patient's table needs per row
+  // (Dokter / Room / Keluhan / Est. Dur / Appt) that a plain intake form
+  // was previously missing.
   appointmentDoctor: '',
+  appointmentRoom: '',
+  appointmentKeluhan: '',
+  appointmentDuration: '',
   appointmentDate: '',
   appointmentTime: '',
 };
@@ -69,20 +112,6 @@ const initialMedicalData = {
   allergyHistory: '',
   fileName: '',
 };
-
-function FieldInput({ label, ...props }) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <Label className="text-sm font-medium text-slate-700">{label}</Label>
-      <div className="flex h-10 w-full items-center rounded-lg border border-slate-200 bg-white px-3 shadow-xs focus-within:border-slate-400">
-        <Input
-          className="h-auto p-0 text-sm placeholder:text-slate-400 focus-visible:ring-0"
-          {...props}
-        />
-      </div>
-    </div>
-  );
-}
 
 function YesNoField({ label, value, onChange }) {
   return (
@@ -136,8 +165,18 @@ export default function Registration() {
 
   function handleNext(e) {
     e.preventDefault();
-    if (!patientData.fullName || !patientData.phone) {
-      toast.error('Please fill in the patient name and phone number');
+    const required = [
+      ['firstName', 'First Name'],
+      ['sex', 'Sex'],
+      ['religion', 'Religion'],
+      ['phone1', 'Phone Number 1'],
+      ['phone2', 'Phone Number 2'],
+      ['emergencyContactName', 'Emergency Contact Name'],
+      ['emergencyContactPhone', 'Emergency Contact Phone Number'],
+    ];
+    const missing = required.find(([field]) => !patientData[field]);
+    if (missing) {
+      toast.error(`Please fill in ${missing[1]}`);
       return;
     }
     setStep(1);
@@ -194,360 +233,445 @@ export default function Registration() {
         <AppSidebar activeKey="patients" width={72} />
 
         <div className="flex-1 overflow-y-auto p-6">
-          <div className="mx-auto flex max-w-5xl flex-col gap-4">
-            {/* Breadcrumb */}
-            <button
-              type="button"
-              onClick={handleBack}
-              className="flex w-fit items-center gap-2 text-sm text-slate-500 hover:text-slate-700"
-            >
-              <ArrowLeft className="size-4" />
-              <span className="text-green-600">Today Patient</span>
-              <span>/</span>
-              <span className="font-medium text-slate-900">New Registration</span>
-            </button>
-
-        <Card className="p-0">
-          <CardHeader className="border-b px-6 py-5">
-            <CardTitle className="text-base font-semibold text-slate-900">
-              New Registration
-            </CardTitle>
-          </CardHeader>
-
-          {/* Stepper */}
-          <div className="flex items-center justify-center gap-3 px-6 py-8">
-            {STEPS.map((label, index) => (
-              <div key={label} className="flex items-center gap-3">
-                <div className="flex flex-col items-center gap-2">
-                  <div
-                    className={cn(
-                      'flex size-6 items-center justify-center rounded-full border-2',
-                      index < step && 'border-green-600 bg-green-600 text-white',
-                      index === step && 'border-green-600 bg-white',
-                      index > step && 'border-slate-300 bg-white'
-                    )}
-                  >
-                    {index < step ? (
-                      <Check className="size-3.5" />
-                    ) : (
-                      <div
-                        className={cn(
-                          'size-2 rounded-full',
-                          index === step ? 'bg-green-600' : 'bg-transparent'
-                        )}
-                      />
-                    )}
-                  </div>
-                  <span
-                    className={cn(
-                      'text-sm',
-                      index === step
-                        ? 'font-medium text-slate-900'
-                        : 'text-slate-400'
-                    )}
-                  >
-                    {label}
-                  </span>
-                </div>
-                {index < STEPS.length - 1 && (
-                  <div className="mb-6 h-px w-24 bg-green-600" />
-                )}
+          <div className="mx-auto flex max-w-6xl flex-col gap-4">
+            {/* Breadcrumb — matches Figma node 469:2478 */}
+            <div className="flex items-center gap-4">
+              <button
+                type="button"
+                onClick={handleBack}
+                aria-label="Back"
+                className="flex size-6 items-center justify-center text-slate-700 hover:text-slate-900"
+              >
+                <ArrowLeft className="size-6" />
+              </button>
+              <div className="flex items-center gap-1 text-sm">
+                <span className="text-[#64748b]">Today Patient</span>
+                <ChevronRight className="size-3.5 text-[#64748b]" />
+                <span className="text-[#0a0a0a]">New Registration</span>
               </div>
-            ))}
-          </div>
+            </div>
 
-          {step === 0 ? (
-            <form onSubmit={handleNext}>
-              <CardContent className="flex flex-col gap-6 border-t pt-6">
-                <div>
-                  <p className="mb-4 text-sm font-semibold text-slate-900">
-                    Patient Information
-                  </p>
-                  <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
-                    <FieldInput
-                      label="Full Name"
-                      placeholder="Enter"
-                      value={patientData.fullName}
-                      onChange={(e) => updatePatient('fullName', e.target.value)}
-                    />
-                    <FieldInput
-                      label="Phone Number"
-                      placeholder="Enter"
-                      value={patientData.phone}
-                      onChange={(e) => updatePatient('phone', e.target.value)}
-                    />
-                    <FieldInput
-                      label="Email"
-                      type="email"
-                      placeholder="Enter"
-                      value={patientData.email}
-                      onChange={(e) => updatePatient('email', e.target.value)}
-                    />
-                    <FieldInput
-                      label="NIK / ID Number"
-                      placeholder="Enter"
-                      value={patientData.nik}
-                      onChange={(e) => updatePatient('nik', e.target.value)}
-                    />
-                    <FieldInput
-                      label="Date of Birth"
-                      type="date"
-                      value={patientData.dateOfBirth}
-                      onChange={(e) =>
-                        updatePatient('dateOfBirth', e.target.value)
-                      }
-                    />
-                    <div className="flex flex-col gap-1.5">
-                      <Label className="text-sm font-medium text-slate-700">
-                        Gender
-                      </Label>
-                      <div className="flex h-10 items-center gap-6">
-                        {['Male', 'Female'].map((option) => (
-                          <label
-                            key={option}
-                            className="flex cursor-pointer items-center gap-2 text-sm text-slate-600"
-                          >
-                            <input
-                              type="radio"
-                              className="size-4 accent-green-600"
-                              checked={patientData.gender === option}
-                              onChange={() => updatePatient('gender', option)}
-                            />
-                            {option}
-                          </label>
-                        ))}
+            <Card className="gap-0 rounded-2xl p-4">
+              <div className="border-b border-[#e2e8f0] pb-2">
+                <p className="text-base font-semibold text-[#020617]">New Registration</p>
+              </div>
+
+              {/* Stepper */}
+              <div className="flex items-center justify-center border-b border-[#e2e8f0] py-8">
+                <Stepper steps={STEPS} activeIndex={step} />
+              </div>
+
+              {step === 0 ? (
+                <form onSubmit={handleNext}>
+                  <CardContent className="flex flex-col gap-5 px-0 pt-5">
+                    <div className="flex flex-col gap-3">
+                      <SectionHeader first>Profile Patient</SectionHeader>
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                        <SelectField
+                          label="Title"
+                          options={TITLES}
+                          value={patientData.title}
+                          onChange={(e) => updatePatient('title', e.target.value)}
+                        />
+                        <TextField
+                          label="First Name"
+                          required
+                          placeholder="Input First Name.."
+                          value={patientData.firstName}
+                          onChange={(e) => updatePatient('firstName', e.target.value)}
+                          className="col-span-2"
+                        />
+                        <TextField
+                          label="Last Name"
+                          placeholder="Input Last Name.."
+                          value={patientData.lastName}
+                          onChange={(e) => updatePatient('lastName', e.target.value)}
+                          className="col-span-2"
+                        />
+                        <TextField
+                          label="Nickname"
+                          placeholder="Type here.."
+                          value={patientData.nickname}
+                          onChange={(e) => updatePatient('nickname', e.target.value)}
+                        />
+                        <TextField
+                          label="Birth Place"
+                          placeholder="Type here.."
+                          value={patientData.birthPlace}
+                          onChange={(e) => updatePatient('birthPlace', e.target.value)}
+                        />
+                        <DateField
+                          label="Birth Date"
+                          value={patientData.birthDate}
+                          onChange={(e) => updatePatient('birthDate', e.target.value)}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                        <SelectField
+                          label="Sex"
+                          required
+                          options={SEXES}
+                          value={patientData.sex}
+                          onChange={(e) => updatePatient('sex', e.target.value)}
+                        />
+                        <TextField
+                          label="Religion"
+                          required
+                          placeholder="Type here.."
+                          value={patientData.religion}
+                          onChange={(e) => updatePatient('religion', e.target.value)}
+                          className="col-span-2"
+                        />
+                        <TextField
+                          label="Hobby"
+                          placeholder="Type here.."
+                          value={patientData.hobby}
+                          onChange={(e) => updatePatient('hobby', e.target.value)}
+                          className="col-span-2"
+                        />
+                        <TextField
+                          label="Occupation"
+                          placeholder="Type here.."
+                          value={patientData.occupation}
+                          onChange={(e) => updatePatient('occupation', e.target.value)}
+                        />
+                        <UploadField
+                          label="ID Card Photo"
+                          fileName={patientData.idCardPhotoName}
+                          onFileChange={(e) =>
+                            updatePatient('idCardPhotoName', e.target.files?.[0]?.name ?? '')
+                          }
+                          className="col-span-2"
+                        />
+                        <TextField
+                          label="ID card Number"
+                          placeholder="Type here.."
+                          value={patientData.idCardNumber}
+                          onChange={(e) => updatePatient('idCardNumber', e.target.value)}
+                        />
                       </div>
                     </div>
-                  </div>
-                  <div className="mt-4">
-                    <FieldInput
-                      label="Address"
-                      placeholder="Enter"
-                      value={patientData.address}
-                      onChange={(e) => updatePatient('address', e.target.value)}
-                    />
-                  </div>
-                </div>
 
-                <div className="border-t pt-6">
-                  <p className="mb-4 text-sm font-semibold text-slate-900">
-                    Patient Category
-                  </p>
-                  <div className="flex gap-3">
-                    {PATIENT_CATEGORIES.map((category) => (
-                      <button
-                        key={category}
-                        type="button"
-                        onClick={() => updatePatient('category', category)}
-                        className={cn(
-                          'rounded-lg border px-4 py-2 text-sm font-medium transition-colors',
-                          patientData.category === category
-                            ? 'border-green-600 bg-green-50 text-green-700'
-                            : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                        )}
-                      >
-                        {category}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {isAppointmentFlow && (
-                  <div className="border-t pt-6">
-                    <p className="mb-4 text-sm font-semibold text-slate-900">
-                      Appointment
-                    </p>
-                    <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-3">
-                      <FieldInput
-                        label="Doctor"
-                        placeholder="Enter"
-                        value={patientData.appointmentDoctor}
-                        onChange={(e) =>
-                          updatePatient('appointmentDoctor', e.target.value)
-                        }
-                      />
-                      <FieldInput
-                        label="Appointment Date"
-                        type="date"
-                        value={patientData.appointmentDate}
-                        onChange={(e) =>
-                          updatePatient('appointmentDate', e.target.value)
-                        }
-                      />
-                      <FieldInput
-                        label="Appointment Time"
-                        type="time"
-                        value={patientData.appointmentTime}
-                        onChange={(e) =>
-                          updatePatient('appointmentTime', e.target.value)
-                        }
-                      />
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-
-              <div className="flex items-center justify-end gap-3 border-t px-6 py-4">
-                <Button type="button" variant="outline" onClick={handleBack}>
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  className="bg-green-600 text-white hover:bg-green-700"
-                >
-                  Next
-                </Button>
-              </div>
-            </form>
-          ) : (
-            <div>
-              <CardContent className="flex flex-col gap-6 border-t pt-6">
-                <div>
-                  <p className="mb-4 text-sm font-semibold text-slate-900">
-                    Medical Record
-                  </p>
-                  <div className="flex flex-col gap-1.5">
-                    <Label className="text-sm font-medium text-slate-700">
-                      Blood Type
-                    </Label>
-                    <div className="flex items-center gap-6">
-                      {BLOOD_TYPES.map((type) => (
-                        <label
-                          key={type}
-                          className="flex cursor-pointer items-center gap-2 text-sm text-slate-600"
-                        >
-                          <input
-                            type="radio"
-                            className="size-4 accent-green-600"
-                            checked={medicalData.bloodType === type}
-                            onChange={() => updateMedical('bloodType', type)}
-                          />
-                          {type}
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="mt-6 grid grid-cols-1 gap-x-6 gap-y-4 border-t pt-6 sm:grid-cols-3">
-                    {CONDITION_FIELDS.map(([field, label]) => (
-                      <YesNoField
-                        key={field}
-                        label={label}
-                        value={conditions[field]}
-                        onChange={(value) => updateCondition(field, value)}
-                      />
-                    ))}
-                  </div>
-
-                  <div className="mt-6 border-t pt-6">
-                    <FieldInput
-                      label="Relative with other patient"
-                      placeholder="Enter"
-                      value={medicalData.relative}
-                      onChange={(e) => updateMedical('relative', e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div className="border-t pt-6">
-                  <p className="mb-4 text-sm font-semibold text-slate-900">
-                    Doctor of Physician
-                  </p>
-                  <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
-                    <FieldInput
-                      label="Name"
-                      placeholder="Enter"
-                      value={medicalData.physicianName}
-                      onChange={(e) =>
-                        updateMedical('physicianName', e.target.value)
-                      }
-                    />
-                    <div className="flex flex-col gap-1.5">
-                      <Label className="text-sm font-medium text-slate-700">
-                        Drug Consumption &amp; Other Sickness
-                        <span className="text-red-500">*</span>
-                      </Label>
-                      <div className="flex h-10 w-full items-center rounded-lg border border-slate-200 bg-white px-3 shadow-xs focus-within:border-slate-400">
-                        <Input
-                          className="h-auto p-0 text-sm placeholder:text-slate-400 focus-visible:ring-0"
-                          placeholder="Enter"
+                    <div className="flex flex-col gap-3">
+                      <SectionHeader>Contact &amp; Address</SectionHeader>
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                        <TextField
+                          label="Phone Number 1"
                           required
+                          placeholder="Input Phone Number.."
+                          value={patientData.phone1}
+                          onChange={(e) => updatePatient('phone1', e.target.value)}
+                        />
+                        <TextField
+                          label="Phone Number 2"
+                          required
+                          placeholder="Input Phone Number.."
+                          value={patientData.phone2}
+                          onChange={(e) => updatePatient('phone2', e.target.value)}
+                        />
+                        <TextField
+                          label="Emergency Contact Name"
+                          required
+                          placeholder="Type here.."
+                          value={patientData.emergencyContactName}
+                          onChange={(e) => updatePatient('emergencyContactName', e.target.value)}
+                        />
+                        <TextField
+                          label="Emergency Contact Phone Number"
+                          required
+                          placeholder="Type here.."
+                          value={patientData.emergencyContactPhone}
+                          onChange={(e) => updatePatient('emergencyContactPhone', e.target.value)}
+                          className="col-span-2"
+                        />
+                        <TextField
+                          label="Email"
+                          type="email"
+                          placeholder="Type here.."
+                          value={patientData.email}
+                          onChange={(e) => updatePatient('email', e.target.value)}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                        <TextField
+                          label="Street"
+                          placeholder="Input Street.."
+                          value={patientData.street}
+                          onChange={(e) => updatePatient('street', e.target.value)}
+                        />
+                        <SelectField
+                          label="Country"
+                          options={COUNTRIES}
+                          value={patientData.country}
+                          onChange={(e) => updatePatient('country', e.target.value)}
+                        />
+                        <SelectField
+                          label="Province"
+                          options={PROVINCES}
+                          value={patientData.province}
+                          onChange={(e) => updatePatient('province', e.target.value)}
+                        />
+                        <SelectField
+                          label="City"
+                          options={CITIES}
+                          value={patientData.city}
+                          onChange={(e) => updatePatient('city', e.target.value)}
+                        />
+                        <SelectField
+                          label="District"
+                          options={DISTRICTS}
+                          value={patientData.district}
+                          onChange={(e) => updatePatient('district', e.target.value)}
+                        />
+                        <SelectField
+                          label="Sub District"
+                          options={SUB_DISTRICTS}
+                          value={patientData.subDistrict}
+                          onChange={(e) => updatePatient('subDistrict', e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-3">
+                      <SectionHeader>Membership</SectionHeader>
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                        <DateField label="Date Register" disabled />
+                        <TextField
+                          label="Guarantee Company"
+                          placeholder="Input Guarantee Company"
+                          disabled
+                        />
+                        <TextField
+                          label="Relative Name"
+                          placeholder="Input Relative Name.."
+                          disabled
+                        />
+                        <SelectField
+                          label="Category"
+                          options={PATIENT_CATEGORIES}
+                          value={patientData.category}
+                          onChange={(e) => updatePatient('category', e.target.value)}
+                        />
+                        <TextField
+                          label="Membership Number"
+                          placeholder="Type here.."
+                          value={patientData.membershipNumber}
+                          onChange={(e) => updatePatient('membershipNumber', e.target.value)}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                        <SelectField
+                          label="How did you find us?"
+                          options={FIND_US_OPTIONS}
+                          value={patientData.howDidYouFindUs}
+                          onChange={(e) => updatePatient('howDidYouFindUs', e.target.value)}
+                          className="col-span-2"
+                        />
+                        <SelectField
+                          label="Relatives"
+                          options={RELATIVE_OPTIONS}
+                          value={patientData.relatives}
+                          onChange={(e) => updatePatient('relatives', e.target.value)}
+                          className="col-span-2"
+                        />
+                      </div>
+                    </div>
+
+                    {isAppointmentFlow && (
+                      <div className="flex flex-col gap-3">
+                        <SectionHeader>Appointment</SectionHeader>
+                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                          <SelectField
+                            label="Doctor"
+                            options={DOCTORS}
+                            value={patientData.appointmentDoctor}
+                            onChange={(e) => updatePatient('appointmentDoctor', e.target.value)}
+                          />
+                          <SelectField
+                            label="Room"
+                            options={ROOMS}
+                            value={patientData.appointmentRoom}
+                            onChange={(e) => updatePatient('appointmentRoom', e.target.value)}
+                          />
+                          <TextField
+                            label="Keluhan"
+                            placeholder="Type here.."
+                            value={patientData.appointmentKeluhan}
+                            onChange={(e) => updatePatient('appointmentKeluhan', e.target.value)}
+                            className="col-span-2"
+                          />
+                          <SelectField
+                            label="Est. Duration"
+                            options={DURATIONS}
+                            value={patientData.appointmentDuration}
+                            onChange={(e) => updatePatient('appointmentDuration', e.target.value)}
+                          />
+                          <DateField
+                            label="Appointment Date"
+                            value={patientData.appointmentDate}
+                            onChange={(e) => updatePatient('appointmentDate', e.target.value)}
+                          />
+                          <TextField
+                            label="Appointment Time"
+                            type="time"
+                            value={patientData.appointmentTime}
+                            onChange={(e) => updatePatient('appointmentTime', e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+
+                  <div className="flex items-center justify-end gap-4 border-t border-[#e2e8f0] px-0 pt-4">
+                    <button
+                      type="button"
+                      onClick={handleBack}
+                      className="min-h-9 rounded-lg border border-solid border-[#ef4444] px-6 py-2.5 text-sm font-medium text-[#ef4444] hover:bg-red-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="min-h-9 rounded-lg bg-[#16a34a] px-6 py-2.5 text-sm font-medium text-white hover:bg-green-700"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div>
+                  <CardContent className="flex flex-col gap-6 px-0 pt-5">
+                    <div>
+                      <SectionHeader first>Medical Record</SectionHeader>
+                      <div className="mt-3 flex flex-col gap-1.5">
+                        <Label className="text-sm font-medium text-slate-700">
+                          Blood Type
+                        </Label>
+                        <div className="flex items-center gap-6">
+                          {BLOOD_TYPES.map((type) => (
+                            <label
+                              key={type}
+                              className="flex cursor-pointer items-center gap-2 text-sm text-slate-600"
+                            >
+                              <input
+                                type="radio"
+                                className="size-4 accent-green-600"
+                                checked={medicalData.bloodType === type}
+                                onChange={() => updateMedical('bloodType', type)}
+                              />
+                              {type}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="mt-6 grid grid-cols-1 gap-x-6 gap-y-4 border-t border-[#e2e8f0] pt-6 sm:grid-cols-3">
+                        {CONDITION_FIELDS.map(([field, label]) => (
+                          <YesNoField
+                            key={field}
+                            label={label}
+                            value={conditions[field]}
+                            onChange={(value) => updateCondition(field, value)}
+                          />
+                        ))}
+                      </div>
+
+                      <div className="mt-6 border-t border-[#e2e8f0] pt-6">
+                        <TextField
+                          label="Relative with other patient"
+                          placeholder="Enter"
+                          value={medicalData.relative}
+                          onChange={(e) => updateMedical('relative', e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="border-t border-[#e2e8f0] pt-6">
+                      <SectionHeader first>Doctor of Physician</SectionHeader>
+                      <div className="mt-3 grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
+                        <TextField
+                          label="Name"
+                          placeholder="Enter"
+                          value={medicalData.physicianName}
+                          onChange={(e) =>
+                            updateMedical('physicianName', e.target.value)
+                          }
+                        />
+                        <TextField
+                          label="Drug Consumption & Other Sickness"
+                          required
+                          placeholder="Enter"
                           value={medicalData.drugConsumption}
                           onChange={(e) =>
                             updateMedical('drugConsumption', e.target.value)
                           }
                         />
+                        <TextField
+                          label="Phone"
+                          placeholder="Enter"
+                          value={medicalData.physicianPhone}
+                          onChange={(e) =>
+                            updateMedical('physicianPhone', e.target.value)
+                          }
+                        />
+                        <TextField
+                          label="Allergy History"
+                          placeholder="Enter"
+                          value={medicalData.allergyHistory}
+                          onChange={(e) =>
+                            updateMedical('allergyHistory', e.target.value)
+                          }
+                        />
                       </div>
                     </div>
-                    <FieldInput
-                      label="Phone"
-                      placeholder="Enter"
-                      value={medicalData.physicianPhone}
-                      onChange={(e) =>
-                        updateMedical('physicianPhone', e.target.value)
-                      }
-                    />
-                    <FieldInput
-                      label="Allergy History"
-                      placeholder="Enter"
-                      value={medicalData.allergyHistory}
-                      onChange={(e) =>
-                        updateMedical('allergyHistory', e.target.value)
-                      }
-                    />
-                  </div>
-                </div>
 
-                <div className="border-t pt-6">
-                  <p className="mb-4 text-sm font-semibold text-slate-900">
-                    Supporting Files X-rays or other
-                  </p>
-                  <div className="flex items-center gap-3">
-                    <label className="flex h-10 flex-1 cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-500">
-                      <Upload className="size-4 text-slate-400" />
-                      {medicalData.fileName || 'Choose File  No file chosen'}
-                      <input
-                        type="file"
-                        className="hidden"
-                        onChange={(e) =>
-                          updateMedical(
-                            'fileName',
-                            e.target.files?.[0]?.name ?? ''
-                          )
-                        }
-                      />
-                    </label>
-                    <Button
+                    <div className="border-t border-[#e2e8f0] pt-6">
+                      <SectionHeader first>Supporting Files X-rays or other</SectionHeader>
+                      <div className="mt-3 flex items-center gap-3">
+                        <label className="flex h-10 flex-1 cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-500">
+                          <Upload className="size-4 text-slate-400" />
+                          {medicalData.fileName || 'Choose File  No file chosen'}
+                          <input
+                            type="file"
+                            className="hidden"
+                            onChange={(e) =>
+                              updateMedical(
+                                'fileName',
+                                e.target.files?.[0]?.name ?? ''
+                              )
+                            }
+                          />
+                        </label>
+                        <Button
+                          type="button"
+                          onClick={handleFileSubmit}
+                          className="bg-green-600 text-white hover:bg-green-700"
+                        >
+                          Submit
+                        </Button>
+                      </div>
+                      <p className="mt-1.5 text-xs text-slate-400">Upload a file</p>
+                    </div>
+                  </CardContent>
+
+                  <div className="flex items-center justify-end gap-4 border-t border-[#e2e8f0] px-0 pt-4">
+                    <button
                       type="button"
-                      onClick={handleFileSubmit}
-                      className="bg-green-600 text-white hover:bg-green-700"
+                      onClick={handleBack}
+                      className="min-h-9 rounded-lg border border-solid border-[#ef4444] px-6 py-2.5 text-sm font-medium text-[#ef4444] hover:bg-red-50"
                     >
-                      Submit
-                    </Button>
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSave}
+                      className="min-h-9 rounded-lg bg-[#16a34a] px-6 py-2.5 text-sm font-medium text-white hover:bg-green-700"
+                    >
+                      Save
+                    </button>
                   </div>
-                  <p className="mt-1.5 text-xs text-slate-400">Upload a file</p>
                 </div>
-              </CardContent>
-
-              <div className="flex items-center justify-end gap-3 border-t px-6 py-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
-                  onClick={handleBack}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="button"
-                  onClick={handleSave}
-                  className="bg-green-600 text-white hover:bg-green-700"
-                >
-                  Save
-                </Button>
-              </div>
-            </div>
-          )}
+              )}
             </Card>
           </div>
         </div>

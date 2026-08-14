@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Moon, Bell, Search, Plus, Share2, Eye, Pencil, ArrowUpDown, X } from 'lucide-react';
+import { Moon, Bell, Search, Plus, Eye, Pencil, ArrowUpDown, X } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 
 import { Button } from '@/components/ui/button';
@@ -22,6 +22,7 @@ import PatientNameHoverCard from '@/components/patient-name-hover-card';
 import PatientDetailSheet from '@/components/patient-detail-sheet';
 import PatientNotFoundDialog from '@/components/patient-not-found-dialog';
 import MrCheckIcon from '@/components/mr-check-icon';
+import roomsLabsIcon from '@/assets/rooms-labs-icon.png';
 import { cn } from '@/lib/utils';
 
 const STATUS_STYLES = {
@@ -256,7 +257,7 @@ export default function TodaysPatient() {
                 </Button>
 
                 <Button className="h-9 rounded-3xl bg-green-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-green-700">
-                  <Share2 className="size-4" />
+                  <img src={roomsLabsIcon} alt="" className="size-4" />
                   Rooms &amp; Labs
                 </Button>
 

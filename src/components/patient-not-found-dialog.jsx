@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { FileSearch, UserPlus } from 'lucide-react';
+import { UserPlus } from 'lucide-react';
 
 import {
   Dialog,
@@ -8,20 +8,15 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
+import patientNotFoundIllustration from '@/assets/patient-not-found-illustration.png';
 
 /**
  * "No results" popup shown when the toolbar search (Cari Pasien / ID
  * Patient / Nomor Telp) doesn't match any patient — matches Figma node
- * 469:6139 ("Data patient not regis"): header + description, a soft
- * illustration, "Patient not yet registered" message, and a gradient
- * green CTA that routes into the registration + appointment flow.
- *
- * Note: the Figma frame uses a custom illustration (a document +
- * magnifying glass artwork) whose source asset lives on the design
- * tool's local asset server and isn't reachable from this environment,
- * so it's approximated here with a matching icon-based illustration in
- * the same soft blue/green palette rather than a re-drawn copy of the
- * original artwork.
+ * 469:6139 ("Data patient not regis"): header + description, the
+ * document + magnifying glass illustration, "Patient not yet registered"
+ * message, and a gradient green CTA that routes into the registration +
+ * appointment flow.
  */
 export default function PatientNotFoundDialog({ open, onOpenChange }) {
   const navigate = useNavigate();
@@ -53,8 +48,12 @@ export default function PatientNotFoundDialog({ open, onOpenChange }) {
             }}
           />
 
-          <div className="relative flex size-[120px] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#dbeafe] to-[#bfdbfe]">
-            <FileSearch className="size-14 text-[#3b82f6]" strokeWidth={1.5} />
+          <div className="relative flex size-[120px] shrink-0 items-center justify-center overflow-clip">
+            <img
+              src={patientNotFoundIllustration}
+              alt=""
+              className="size-full object-contain"
+            />
           </div>
 
           <div className="relative flex flex-col items-center gap-1 text-center">
