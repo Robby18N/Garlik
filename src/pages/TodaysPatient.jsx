@@ -284,21 +284,40 @@ export default function TodaysPatient() {
           <SummaryCards />
 
           <div className="flex flex-col gap-3 rounded-2xl bg-white p-4 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)]">
-            {/* Toolbar row */}
+            {/* Toolbar row — rebuilt per Figma node 600:6237 ("2nd Level"):
+                the Today/Tomorrow toggle now sits with the entries count on
+                the left, a new "Appointment" button joins the right-side
+                cluster, and every button/field here uses the "small" size
+                (36px height, tighter 12px/6px padding) instead of the
+                larger default padding used elsewhere in the app. */}
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-base font-semibold text-slate-950">
-                Showing {visiblePatients.length} of 20 entries
-              </p>
+              <div className="flex flex-wrap items-center gap-3">
+                <p className="text-base font-semibold text-slate-950">
+                  Showing {visiblePatients.length} of 20 entries
+                </p>
+
+                {/* Today / Tomorrow toggle, matching Figma node 576:3118 — the switch
+                    track is always blue (#3b82f6) regardless of on/off state. */}
+                <div className="flex h-9 items-center gap-2.5 rounded-full border border-slate-200 bg-white px-4">
+                  <span className="text-sm font-medium text-slate-950">Today</span>
+                  <Switch
+                    checked={dayFilter === 'Tomorrow'}
+                    onCheckedChange={(checked) => setDayFilter(checked ? 'Tomorrow' : 'Today')}
+                    className="data-[state=checked]:bg-[#3b82f6] data-[state=unchecked]:bg-[#3b82f6]"
+                  />
+                  <span className="text-sm font-medium text-slate-950">Tomorrow</span>
+                </div>
+              </div>
 
               <div className="flex flex-wrap items-center gap-4">
                 <div id="search-patient-trigger" className="relative w-[300px] max-w-full">
-                  <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+                  <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
                   <Input
                     value={toolbarQuery}
                     onChange={(e) => setToolbarQuery(e.target.value)}
                     placeholder="Cari Pasien / ID Patient / Nomor Telp"
                     aria-label="Cari pasien berdasarkan nama, ID pasien, atau nomor telepon"
-                    className="h-10 rounded-3xl border border-solid border-[#e2e8f0] bg-white pl-10 pr-9 text-sm shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)]"
+                    className="h-9 rounded-3xl border border-solid border-[#e2e8f0] bg-white pl-9 pr-8 text-sm shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)]"
                   />
                   {toolbarQuery && (
                     <button
@@ -313,32 +332,31 @@ export default function TodaysPatient() {
                 </div>
 
                 <Button
+                  size="sm"
                   onClick={() => navigate('/registration', { state: { flow: 'new-registration' } })}
-                  className="h-9 rounded-3xl bg-green-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-green-700"
+                  className="h-9 rounded-3xl bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700"
                 >
                   <Plus className="size-4" />
                   New Registration
                 </Button>
 
                 <Button
+                  size="sm"
+                  onClick={() => toast.info('Fitur Appointment akan segera hadir')}
+                  className="h-9 rounded-3xl bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700"
+                >
+                  <Plus className="size-4" />
+                  Appointment
+                </Button>
+
+                <Button
+                  size="sm"
                   onClick={() => setRoomLabSettingOpen(true)}
-                  className="h-9 rounded-3xl bg-green-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-green-700"
+                  className="h-9 rounded-3xl bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700"
                 >
                   <img src={roomsLabsIcon} alt="" className="size-4" />
                   Rooms &amp; Labs
                 </Button>
-
-                {/* Today / Tomorrow toggle, matching Figma node 576:3118 — the switch
-                    track is always blue (#3b82f6) regardless of on/off state. */}
-                <div className="flex h-10 items-center gap-2.5 rounded-full border border-slate-200 bg-white px-4">
-                  <span className="text-sm font-medium text-slate-950">Today</span>
-                  <Switch
-                    checked={dayFilter === 'Tomorrow'}
-                    onCheckedChange={(checked) => setDayFilter(checked ? 'Tomorrow' : 'Today')}
-                    className="data-[state=checked]:bg-[#3b82f6] data-[state=unchecked]:bg-[#3b82f6]"
-                  />
-                  <span className="text-sm font-medium text-slate-950">Tomorrow</span>
-                </div>
               </div>
             </div>
 
