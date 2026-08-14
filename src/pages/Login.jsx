@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Eye, EyeOff } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,14 +9,25 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 
+const LOGIN_LOADING_MS = 2000;
+
 export default function Login() {
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   function handleSubmit(e) {
     e.preventDefault();
-    navigate('/patients');
+    if (isLoggingIn) return;
+    setIsLoggingIn(true);
+    // 2s loading pass before handing off to Today's Patient — `fromLogin`
+    // flags that page to run its own brief shimmer skeleton before the
+    // real content fades in, so the two loading states read as one
+    // continuous transition rather than a loading-screen jump-cut.
+    setTimeout(() => {
+      navigate('/patients', { state: { fromLogin: true } });
+    }, LOGIN_LOADING_MS);
   }
 
   return (
@@ -69,6 +81,7 @@ export default function Login() {
                     id="identifier"
                     type="text"
                     placeholder="Enter your email/phone number"
+                    disabled={isLoggingIn}
                     className="h-auto p-0 text-base placeholder:text-slate-500 focus-visible:ring-0"
                   />
                 </div>
@@ -84,13 +97,15 @@ export default function Login() {
                     id="password"
                     type={showPassword ? 'text' : 'password'}
                     placeholder="Enter your password"
+                    disabled={isLoggingIn}
                     className="h-auto p-0 text-base placeholder:text-slate-500 focus-visible:ring-0"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword((v) => !v)}
+                    disabled={isLoggingIn}
                     aria-label={showPassword ? 'Hide password' : 'Show password'}
-                    className="flex size-6 shrink-0 items-center justify-center text-slate-500 hover:text-slate-700"
+                    className="flex size-6 shrink-0 items-center justify-center text-slate-500 hover:text-slate-700 disabled:opacity-50"
                   >
                     {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                   </button>
@@ -116,16 +131,44 @@ export default function Login() {
               {/* Submit button */}
               <Button
                 type="submit"
+                disabled={isLoggingIn}
                 className={cn(
-                  'min-h-9 w-full rounded-lg bg-gradient-to-r from-[#87c341] to-[#03a83d] px-4 py-3 text-base font-bold text-white shadow-sm hover:opacity-90 hover:from-[#87c341] hover:to-[#03a83d]'
+                  'min-h-9 w-full rounded-lg bg-gradient-to-r from-[#87c341] to-[#03a83d] px-4 py-3 text-base font-bold text-white shadow-sm hover:opacity-90 hover:from-[#87c341] hover:to-[#03a83d] disabled:opacity-100'
                 )}
               >
-                Log in
+                {isLoggingIn ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" />
+                    Logging in...
+                  </>
+                ) : (
+                  'Log in'
+                )}
               </Button>
             </div>
           </form>
         </div>
       </div>
+
+      {/* Full-screen loading pass shown for 2s after Log in is clicked,
+          before handing off to Today's Patient (which then runs its own
+          brief shimmer skeleton) — the two together read as one continuous
+          "smart animate" style transition rather than a hard cut. */}
+      <AnimatePresence>
+        {isLoggingIn && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-white/90 backdrop-blur-sm"
+          >
+            <img src="/logo.png" alt="" className="h-10 w-auto object-contain" />
+            <Loader2 className="size-8 animate-spin text-green-600" />
+            <p className="text-base font-medium text-slate-700">Logging you in...</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

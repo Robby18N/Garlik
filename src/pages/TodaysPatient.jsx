@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { AnimatePresence, motion } from 'framer-motion';
 import { Moon, Bell, Search, Plus, Eye, Pencil, ArrowUpDown, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Switch } from '@/components/ui/switch';
@@ -24,6 +25,7 @@ import PatientDetailSheet from '@/components/patient-detail-sheet';
 import PatientNotFoundDialog from '@/components/patient-not-found-dialog';
 import SettingRoomLabDialog from '@/components/setting-room-lab-dialog';
 import MrCheckIcon from '@/components/mr-check-icon';
+import TodaysPatientSkeleton from '@/components/todays-patient-skeleton';
 import roomsLabsIcon from '@/assets/rooms-labs-icon.png';
 import { cn } from '@/lib/utils';
 
@@ -114,6 +116,20 @@ const HEADER_CLASS =
 
 export default function TodaysPatient() {
   const navigate = useNavigate();
+  const location = useLocation();
+  // Shimmer skeleton shown only for the specific Login → Today's Patient
+  // handoff (flagged via router state from the login loading screen) — a
+  // brief loading pass before the real header/summary cards/table crossfade
+  // in. Arriving here any other way (e.g. Cancel from New Registration)
+  // skips it entirely.
+  const [showSkeleton, setShowSkeleton] = useState(() => Boolean(location.state?.fromLogin));
+
+  useEffect(() => {
+    if (!showSkeleton) return;
+    const timer = setTimeout(() => setShowSkeleton(false), 900);
+    return () => clearTimeout(timer);
+  }, [showSkeleton]);
+
   const [dayFilter, setDayFilter] = useState('Today');
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -217,7 +233,23 @@ export default function TodaysPatient() {
   }, [toolbarHasNoMatch, toolbarQuery]);
 
   return (
-    <div className="flex min-h-screen w-full bg-[#f5f6f8]">
+    <AnimatePresence mode="wait" initial={false}>
+      {showSkeleton ? (
+        <motion.div
+          key="skeleton"
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
+        >
+          <TodaysPatientSkeleton />
+        </motion.div>
+      ) : (
+    <motion.div
+      key="content"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
+      className="flex min-h-screen w-full bg-[#f5f6f8]"
+    >
       <AppSidebar activeKey="patients" width={60} />
 
       {/* Main content */}
@@ -493,6 +525,8 @@ export default function TodaysPatient() {
           />
         </main>
       </div>
-    </div>
+    </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
