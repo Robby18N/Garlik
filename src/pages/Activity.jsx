@@ -161,7 +161,7 @@ function RoomCard({
   const overflow = room.queue.length - upcoming.length;
 
   return (
-    <div className="flex flex-1 flex-col gap-4 rounded-2xl border border-slate-100 bg-white p-4 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)]">
+    <div className="flex min-w-[260px] flex-1 flex-col gap-4 rounded-2xl border border-slate-100 bg-white p-4 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)]">
       <div className="flex items-center justify-between">
         <div className="flex flex-col">
           <p className="text-base font-semibold text-slate-900">{room.id}</p>
@@ -560,14 +560,14 @@ export default function Activity() {
   }, [visibleRooms, visibleLog]);
 
   return (
-    <div className="flex min-h-screen w-full bg-[#f5f6f8]">
+    <div className="flex min-h-screen w-full flex-col bg-[#f5f6f8] lg:flex-row">
       <AppSidebar activeKey="activity" width={60} />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-[50px] w-full items-center justify-between border-b border-slate-200 bg-white px-6">
-          <div className="flex items-baseline gap-3">
+          <div className="flex min-w-0 items-baseline gap-3">
             <h1 className="text-lg font-bold text-slate-900">Activity</h1>
-            <span className="text-sm text-slate-500">Papan Antrian &amp; Aktivitas Hari Ini</span>
+            <span className="truncate text-sm text-slate-500">Papan Antrian &amp; Aktivitas Hari Ini</span>
           </div>
           <div className="flex items-center gap-3">
             <button
@@ -588,7 +588,7 @@ export default function Activity() {
           </div>
         </header>
 
-        <main className="flex flex-1 flex-col gap-4 p-6">
+        <main className="flex min-w-0 flex-1 flex-col gap-4 p-6">
           {isDoctor ? (
             <DoctorActivityView
               room={visibleRooms[0]}
@@ -611,7 +611,7 @@ export default function Activity() {
           <div className="flex w-full flex-col gap-3">
             <DetailHighlightToggle expanded={showDetail} onToggle={() => setShowDetail((v) => !v)} />
 
-            <div className="flex w-full items-start gap-4">
+            <div className="flex w-full flex-wrap items-start gap-4">
               <StatCard
                 icon={<UserCheck className="size-4" />}
                 title="Ruangan Aktif"
@@ -705,7 +705,7 @@ export default function Activity() {
           </div>
 
           {/* Per-room queue board — Doctor only sees their own room */}
-          <div className="flex w-full items-stretch gap-4">
+          <div className="flex w-full flex-wrap items-stretch gap-4">
             {visibleRooms.map((room) => (
               <RoomCard
                 key={room.id}

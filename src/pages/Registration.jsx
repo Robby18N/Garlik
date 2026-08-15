@@ -321,10 +321,10 @@ export default function Registration() {
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         <AppSidebar activeKey="patients" width={72} />
 
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="min-w-0 flex-1 overflow-y-auto p-6">
           <div className="mx-auto flex max-w-6xl flex-col gap-4">
             {/* Breadcrumb — matches Figma node 469:2478 */}
             <div className="flex items-center gap-4">

@@ -427,14 +427,14 @@ export default function Screening() {
   }, [queue]);
 
   return (
-    <div className="flex min-h-screen w-full bg-[#f5f6f8]">
+    <div className="flex min-h-screen w-full flex-col bg-[#f5f6f8] lg:flex-row">
       <AppSidebar activeKey="screening" width={60} />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-[50px] w-full items-center justify-between border-b border-slate-200 bg-white px-6">
-          <div className="flex items-baseline gap-3">
+          <div className="flex min-w-0 items-baseline gap-3">
             <h1 className="text-lg font-bold text-slate-900">Skrining</h1>
-            <span className="text-sm text-slate-500">Skrining Awal Pasien Baru</span>
+            <span className="truncate text-sm text-slate-500">Skrining Awal Pasien Baru</span>
           </div>
           <div className="flex items-center gap-3">
             <button
@@ -455,11 +455,11 @@ export default function Screening() {
           </div>
         </header>
 
-        <main className="flex flex-1 flex-col gap-4 p-6">
+        <main className="flex min-w-0 flex-1 flex-col gap-4 p-6">
           <div className="flex w-full flex-col gap-3">
             <DetailHighlightToggle expanded={showDetail} onToggle={() => setShowDetail((v) => !v)} />
 
-            <div className="flex w-full items-start gap-4">
+            <div className="flex w-full flex-wrap items-start gap-4">
               <StatCard
                 icon={<ClipboardList className="size-4" />}
                 title="Perlu Skrining"
@@ -561,8 +561,8 @@ export default function Screening() {
               <p className="text-base font-semibold text-slate-950">Antrian Skrining Pasien Baru</p>
             </div>
 
-            <div className="overflow-x-auto">
-              <Table className="table-fixed">
+            <div className="w-full min-w-0 overflow-x-auto">
+              <Table className="table-fixed min-w-[900px]">
                 <TableHeader>
                   <TableRow className="border-transparent hover:bg-transparent">
                     <TableHead className={cn(HEADER_CLASS, COL_WIDTH.no)}>No</TableHead>

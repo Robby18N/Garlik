@@ -146,7 +146,7 @@ export default function SummaryCards({ patients, doctorScoped = false }) {
     <div className="flex w-full flex-col gap-3">
       <DetailHighlightToggle expanded={showDetail} onToggle={() => setShowDetail((v) => !v)} />
 
-      <div className="flex w-full items-start gap-4">
+      <div className="flex w-full flex-wrap items-start gap-4">
         {/* Sticky notes — free-text notes: type to add, click a note to
             edit in place, hover to reveal a delete button. */}
         <StatCard

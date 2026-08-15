@@ -6,13 +6,13 @@
 // instead of redefining it locally.
 export default function StatPill({ icon, label, value }) {
   return (
-    <div className="flex flex-1 items-center gap-3 rounded-2xl border border-slate-100 bg-white px-4 py-3 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)]">
+    <div className="flex min-w-[180px] flex-1 items-center gap-3 rounded-2xl border border-slate-100 bg-white px-4 py-3 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)]">
       <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-slate-50 text-slate-400">
         {icon}
       </div>
-      <div className="flex flex-col">
-        <span className="text-lg font-semibold text-slate-900">{value}</span>
-        <span className="text-xs text-slate-400">{label}</span>
+      <div className="flex min-w-0 flex-col">
+        <span className="truncate text-lg font-semibold text-slate-900">{value}</span>
+        <span className="truncate text-xs text-slate-400">{label}</span>
       </div>
     </div>
   );

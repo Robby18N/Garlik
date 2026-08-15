@@ -127,14 +127,14 @@ export default function Schedule() {
   const selectedDay = days.find((d) => d.offset === offset);
 
   return (
-    <div className="flex min-h-screen w-full bg-[#f5f6f8]">
+    <div className="flex min-h-screen w-full flex-col bg-[#f5f6f8] lg:flex-row">
       <AppSidebar activeKey="schedule" width={60} />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-[50px] w-full items-center justify-between border-b border-slate-200 bg-white px-6">
-          <div className="flex items-baseline gap-3">
+          <div className="flex min-w-0 items-baseline gap-3">
             <h1 className="text-lg font-bold text-slate-900">Jadwal Praktik</h1>
-            <span className="text-sm text-slate-500">
+            <span className="truncate text-sm text-slate-500">
               {isDoctor ? `Jadwal Anda – ${doctorName}` : 'Jadwal per Dokter'}
             </span>
           </div>
@@ -157,7 +157,7 @@ export default function Schedule() {
           </div>
         </header>
 
-        <main className="flex flex-1 flex-col gap-4 p-6">
+        <main className="flex min-w-0 flex-1 flex-col gap-4 p-6">
           <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-4">
             {!isDoctor && (
               <div className="flex items-center gap-3">

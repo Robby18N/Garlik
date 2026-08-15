@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   LayoutGrid,
@@ -15,11 +16,13 @@ import {
   ClipboardCheck,
   CalendarDays,
   Pill,
+  Menu,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { useRole } from '@/context/role-context';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 
 // Exact layer names/order from Figma's left nav rail, identical across
 // screens (verified on nodes 469:3816 and 469:2768): Icon / calendar-search,
@@ -80,46 +83,105 @@ const ROLE_ACCESS = {
  */
 export default function AppSidebar({ activeKey = 'patients', width = 60 }) {
   const { role } = useRole();
+  const [mobileOpen, setMobileOpen] = useState(false);
   const allowed = ROLE_ACCESS[role] ?? [];
   const visibleItems = NAV_ITEMS.filter((item) => allowed.includes(item.key));
+  const activeLabel = visibleItems.find((item) => item.key === activeKey)?.label;
 
   return (
-    <aside
-      style={{ width }}
-      className="flex shrink-0 flex-col items-center border-r border-slate-200 bg-white py-4"
-    >
-      <nav className="flex flex-col gap-3">
-        {visibleItems.map(({ icon: Icon, key, label, path }) => {
-          const isActive = key === activeKey;
+    <>
+      {/* Below `lg`: the icon rail doesn't fit a narrow viewport, so it's
+          replaced by a slim top bar with a hamburger trigger + slide-in
+          drawer holding the same nav (this time icon + label, since a
+          drawer has room and touch users can't rely on hover tooltips).
+          Page wrappers switch to `flex-col lg:flex-row` so this bar stacks
+          above the content instead of squeezing beside it. */}
+      <div className="flex h-14 w-full shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-4 lg:hidden">
+        <button
+          type="button"
+          aria-label="Buka menu navigasi"
+          onClick={() => setMobileOpen(true)}
+          className="flex size-9 shrink-0 items-center justify-center rounded-lg text-slate-600 transition-colors hover:bg-slate-100"
+        >
+          <Menu className="size-5" />
+        </button>
+        <span className="truncate text-sm font-semibold text-slate-900">
+          {activeLabel ?? 'GARLIK'}
+        </span>
+      </div>
 
-          const button = (
-            <button
-              type="button"
-              className={cn(
-                'flex size-9 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700',
-                isActive && 'bg-green-600 text-white hover:bg-green-600 hover:text-white'
-              )}
-            >
-              <Icon className="size-[18px]" />
-            </button>
-          );
+      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+        <SheetContent side="left" className="w-72 max-w-[80vw] gap-0 p-0">
+          <SheetHeader className="border-b border-slate-200 px-4 py-4">
+            <SheetTitle className="text-base">Menu Navigasi</SheetTitle>
+          </SheetHeader>
+          <nav className="flex flex-col gap-1 overflow-auto p-3">
+            {visibleItems.map(({ icon: Icon, key, label, path }) => {
+              const isActive = key === activeKey;
+              const row = (
+                <span
+                  className={cn(
+                    'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-600 transition-colors',
+                    path && 'hover:bg-slate-100 hover:text-slate-900',
+                    isActive && 'bg-green-600 text-white hover:bg-green-600 hover:text-white',
+                    !path && 'opacity-50'
+                  )}
+                >
+                  <Icon className="size-[18px] shrink-0" />
+                  {label}
+                </span>
+              );
 
-          return (
-            <Tooltip key={key}>
-              <TooltipTrigger asChild>
-                {path ? (
-                  <Link to={path} aria-label={label}>
-                    {button}
-                  </Link>
-                ) : (
-                  <span aria-label={label}>{button}</span>
+              return path ? (
+                <Link key={key} to={path} onClick={() => setMobileOpen(false)}>
+                  {row}
+                </Link>
+              ) : (
+                <span key={key}>{row}</span>
+              );
+            })}
+          </nav>
+        </SheetContent>
+      </Sheet>
+
+      {/* `lg` and up: original icon rail, unchanged. */}
+      <aside
+        style={{ width }}
+        className="hidden shrink-0 flex-col items-center border-r border-slate-200 bg-white py-4 lg:flex"
+      >
+        <nav className="flex flex-col gap-3">
+          {visibleItems.map(({ icon: Icon, key, label, path }) => {
+            const isActive = key === activeKey;
+
+            const button = (
+              <button
+                type="button"
+                className={cn(
+                  'flex size-9 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700',
+                  isActive && 'bg-green-600 text-white hover:bg-green-600 hover:text-white'
                 )}
-              </TooltipTrigger>
-              <TooltipContent side="right">{label}</TooltipContent>
-            </Tooltip>
-          );
-        })}
-      </nav>
-    </aside>
+              >
+                <Icon className="size-[18px]" />
+              </button>
+            );
+
+            return (
+              <Tooltip key={key}>
+                <TooltipTrigger asChild>
+                  {path ? (
+                    <Link to={path} aria-label={label}>
+                      {button}
+                    </Link>
+                  ) : (
+                    <span aria-label={label}>{button}</span>
+                  )}
+                </TooltipTrigger>
+                <TooltipContent side="right">{label}</TooltipContent>
+              </Tooltip>
+            );
+          })}
+        </nav>
+      </aside>
+    </>
   );
 }

@@ -113,14 +113,14 @@ export default function Dashboard() {
   }, [schedule]);
 
   return (
-    <div className="flex min-h-screen w-full bg-[#f5f6f8]">
+    <div className="flex min-h-screen w-full flex-col bg-[#f5f6f8] lg:flex-row">
       <AppSidebar activeKey="grid" width={60} />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-[50px] w-full items-center justify-between border-b border-slate-200 bg-white px-6">
-          <div className="flex items-baseline gap-3">
+          <div className="flex min-w-0 items-baseline gap-3">
             <h1 className="text-lg font-bold text-slate-900">Dashboard</h1>
-            <span className="text-sm text-slate-500">
+            <span className="truncate text-sm text-slate-500">
               {isDoctor ? `Ringkasan Praktik Anda – ${doctorName}` : 'Ringkasan Klinik Hari Ini'}
             </span>
           </div>
@@ -143,7 +143,7 @@ export default function Dashboard() {
           </div>
         </header>
 
-        <main className="flex flex-1 flex-col gap-6 p-6">
+        <main className="flex min-w-0 flex-1 flex-col gap-6 p-6">
           {!isDoctor ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-200 bg-white/60 py-16 text-center">
               <p className="text-sm font-medium text-slate-500">

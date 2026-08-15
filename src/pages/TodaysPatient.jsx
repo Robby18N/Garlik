@@ -542,7 +542,7 @@ export default function TodaysPatient() {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
-      className="flex min-h-screen w-full bg-[#f5f6f8]"
+      className="flex min-h-screen w-full flex-col bg-[#f5f6f8] lg:flex-row"
     >
       <AppSidebar activeKey="patients" width={60} />
 
@@ -550,9 +550,9 @@ export default function TodaysPatient() {
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Top header */}
         <header className="flex h-[50px] w-full items-center justify-between border-b border-slate-200 bg-white px-6">
-          <div className="flex items-baseline gap-3">
+          <div className="flex min-w-0 items-baseline gap-3">
             <h1 className="text-lg font-bold text-slate-900">Today’s Patient</h1>
-            <span className="text-sm text-slate-500">{formatHeaderDate(new Date())}</span>
+            <span className="truncate text-sm text-slate-500">{formatHeaderDate(new Date())}</span>
           </div>
           <div className="flex items-center gap-3">
             <button
@@ -574,7 +574,7 @@ export default function TodaysPatient() {
         </header>
 
         {/* Page body */}
-        <main className="flex flex-1 flex-col gap-4 p-6">
+        <main className="flex min-w-0 flex-1 flex-col gap-4 p-6">
           <SummaryCards
             patients={
               isDoctor
@@ -677,8 +677,8 @@ export default function TodaysPatient() {
             </div>
 
             {/* Patients table — fixed column widths matching Figma node 576:3192 */}
-            <div className="overflow-x-auto">
-              <Table className="table-fixed">
+            <div className="w-full min-w-0 overflow-x-auto">
+              <Table className="table-fixed min-w-[1180px]">
                 <TableHeader>
                   <TableRow className="border-transparent hover:bg-transparent">
                     <TableHead className={cn(HEADER_CLASS, COL_WIDTH.no, 'text-left')}>No</TableHead>

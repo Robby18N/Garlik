@@ -126,8 +126,8 @@ function FormularyTab() {
           className="h-10 rounded-3xl border border-solid border-[#e2e8f0] bg-white pl-10 text-sm shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)]"
         />
       </div>
-      <div className="overflow-x-auto">
-        <Table className="table-fixed">
+      <div className="w-full min-w-0 overflow-x-auto">
+        <Table className="table-fixed min-w-[640px]">
           <TableHeader>
             <TableRow className="border-transparent hover:bg-transparent">
               <TableHead className={cn(HEADER_CLASS, 'w-[26%] text-left')}>Nama Obat</TableHead>
@@ -165,8 +165,8 @@ function FormularyTab() {
 
 function AllergyTab() {
   return (
-    <div className="overflow-x-auto">
-      <Table className="table-fixed">
+    <div className="w-full min-w-0 overflow-x-auto">
+      <Table className="table-fixed min-w-[640px]">
         <TableHeader>
           <TableRow className="border-transparent hover:bg-transparent">
             <TableHead className={cn(HEADER_CLASS, 'w-[25%] text-left')}>Alergen</TableHead>
@@ -214,8 +214,8 @@ function ClinicalReferenceTab() {
           className="h-10 rounded-3xl border border-solid border-[#e2e8f0] bg-white pl-10 text-sm shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)]"
         />
       </div>
-      <div className="overflow-x-auto">
-        <Table className="table-fixed">
+      <div className="w-full min-w-0 overflow-x-auto">
+        <Table className="table-fixed min-w-[640px]">
           <TableHeader>
             <TableRow className="border-transparent hover:bg-transparent">
               <TableHead className={cn(HEADER_CLASS, 'w-[35%] text-left')}>Diagnosis</TableHead>
@@ -296,14 +296,14 @@ export default function Database() {
   const [activeTab, setActiveTab] = useState('formulary');
 
   return (
-    <div className="flex min-h-screen w-full bg-[#f5f6f8]">
+    <div className="flex min-h-screen w-full flex-col bg-[#f5f6f8] lg:flex-row">
       <AppSidebar activeKey="database" width={60} />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-[50px] w-full items-center justify-between border-b border-slate-200 bg-white px-6">
-          <div className="flex items-baseline gap-3">
+          <div className="flex min-w-0 items-baseline gap-3">
             <h1 className="text-lg font-bold text-slate-900">Database</h1>
-            <span className="text-sm text-slate-500">Referensi Klinis</span>
+            <span className="truncate text-sm text-slate-500">Referensi Klinis</span>
           </div>
           <div className="flex items-center gap-3">
             <button type="button" className="flex size-[30px] items-center justify-center rounded-full text-slate-500 hover:bg-slate-100" aria-label="Toggle theme">
@@ -316,16 +316,16 @@ export default function Database() {
           </div>
         </header>
 
-        <main className="flex flex-1 flex-col gap-4 p-6">
+        <main className="flex min-w-0 flex-1 flex-col gap-4 p-6">
           <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4">
-            <div className="flex gap-2 rounded-2xl border border-slate-100 bg-white p-2 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)]">
+            <div className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-100 bg-white p-2 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)] sm:flex">
               {TABS.map(({ key, label, icon: Icon }) => (
                 <button
                   key={key}
                   type="button"
                   onClick={() => setActiveTab(key)}
                   className={cn(
-                    'flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-sm font-medium transition-colors',
+                    'flex flex-1 items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-sm font-medium transition-colors',
                     activeTab === key ? 'bg-green-600 text-white' : 'text-slate-500 hover:bg-slate-50'
                   )}
                 >

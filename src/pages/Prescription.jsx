@@ -137,14 +137,14 @@ export default function Prescription() {
   }
 
   return (
-    <div className="flex min-h-screen w-full bg-[#f5f6f8]">
+    <div className="flex min-h-screen w-full flex-col bg-[#f5f6f8] lg:flex-row">
       <AppSidebar activeKey="prescription" width={60} />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-[50px] w-full items-center justify-between border-b border-slate-200 bg-white px-6">
-          <div className="flex items-baseline gap-3">
+          <div className="flex min-w-0 items-baseline gap-3">
             <h1 className="text-lg font-bold text-slate-900">E-Resep</h1>
-            <span className="text-sm text-slate-500">Resep Digital Pasien</span>
+            <span className="truncate text-sm text-slate-500">Resep Digital Pasien</span>
           </div>
           <div className="flex items-center gap-3">
             <button type="button" className="flex size-[30px] items-center justify-center rounded-full text-slate-500 hover:bg-slate-100" aria-label="Toggle theme">
@@ -157,7 +157,7 @@ export default function Prescription() {
           </div>
         </header>
 
-        <main className="flex flex-1 flex-col gap-4 p-6">
+        <main className="flex min-w-0 flex-1 flex-col gap-4 p-6">
           <div className="flex flex-col gap-3 rounded-2xl bg-white p-4 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)]">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-base font-semibold text-slate-950">
@@ -201,8 +201,8 @@ export default function Prescription() {
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <Table className="table-fixed">
+            <div className="w-full min-w-0 overflow-x-auto">
+              <Table className="table-fixed min-w-[760px]">
                 <TableHeader>
                   <TableRow className="border-transparent hover:bg-transparent">
                     <TableHead className="h-auto whitespace-nowrap bg-[#f0fdf4] px-3 py-4 font-bold text-[#15803d] w-[5%]">No</TableHead>

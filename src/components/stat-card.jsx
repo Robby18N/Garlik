@@ -35,7 +35,7 @@ export const FADE_TRANSITION = { duration: 0.18, ease: [0.4, 0, 0.2, 1] };
  */
 export function StatCard({ icon, title, count, showDetail, children, minHeight = 110 }) {
   return (
-    <div className={cn(CARD_CLASS, 'flex-1 overflow-hidden')}>
+    <div className={cn(CARD_CLASS, 'min-w-[220px] flex-1 overflow-hidden')}>
       <div className="flex h-11 shrink-0 items-center gap-2.5 px-4">
         <div className={ICON_CHIP_CLASS}>{icon}</div>
         <p className="text-sm font-medium text-slate-700">{title}</p>
