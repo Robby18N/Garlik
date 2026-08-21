@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, X, UserPlus, CalendarPlus, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
@@ -20,8 +20,11 @@ const STEPS = ['Pilih Pasien', 'Detail Appointment'];
 
 // Small mock roster of already-registered patients this dialog searches
 // against — booking an appointment is for an existing patient, unlike the
-// "New Registration" button which creates a brand new record.
-const REGISTERED_PATIENTS = [
+// "New Registration" button which creates a brand new record. Exported so
+// TodaysPatient's toolbar search can check the same master list — a name
+// that doesn't match today's schedule but IS in this roster means "already
+// registered, just not booked for today" rather than "never registered".
+export const REGISTERED_PATIENTS = [
   { id: 1, name: 'Agung Wijaya Kusuma', mrn: 'P-0001', phone: '0813-2037-6091', category: 'VIP' },
   { id: 2, name: 'Siti Rahmawati', mrn: 'P-0002', phone: '0821-2074-6182', category: 'Regular' },
   { id: 3, name: 'Budi Santoso', mrn: 'P-0003', phone: '0822-2111-6273', category: 'Regular' },
@@ -52,12 +55,31 @@ const initialAppointment = {
  * 2 captures the appointment details (doctor/room/keluhan/duration/date/
  * time), matching the same fields Today's Patient's table itself displays.
  */
-export default function MakeAppointmentDialog({ open, onOpenChange, onBooked, extraPatients = [] }) {
+export default function MakeAppointmentDialog({
+  open,
+  onOpenChange,
+  onBooked,
+  extraPatients = [],
+  preselectedPatient = null,
+}) {
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [query, setQuery] = useState('');
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [appointment, setAppointment] = useState(initialAppointment);
+
+  // When opened from the "already registered" search-result popup, the
+  // patient is already known — skip straight to step 1 (Detail Appointment)
+  // instead of making the receptionist search for someone they just found.
+  useEffect(() => {
+    if (open && preselectedPatient) {
+      setSelectedPatient(preselectedPatient);
+      setStep(1);
+    }
+    // Only react to the dialog opening with a preselected patient — once
+    // open, internal navigation (Ganti Pasien / Back) should take over.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, preselectedPatient]);
 
   // Patients registered at runtime (via "New Registration") aren't in this
   // dialog's own seeded roster, but they're just as bookable — merge them

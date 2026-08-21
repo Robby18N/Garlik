@@ -50,7 +50,8 @@ import SummaryCards from '@/components/summary-cards';
 import PatientNameHoverCard from '@/components/patient-name-hover-card';
 import PatientDetailSheet from '@/components/patient-detail-sheet';
 import PatientNotFoundDialog from '@/components/patient-not-found-dialog';
-import MakeAppointmentDialog from '@/components/make-appointment-dialog';
+import PatientFoundDialog from '@/components/patient-found-dialog';
+import MakeAppointmentDialog, { REGISTERED_PATIENTS } from '@/components/make-appointment-dialog';
 import SettingRoomLabDialog from '@/components/setting-room-lab-dialog';
 import MrCheckIcon from '@/components/mr-check-icon';
 import TodaysPatientSkeleton from '@/components/todays-patient-skeleton';
@@ -311,8 +312,13 @@ export default function TodaysPatient() {
   const [toolbarQuery, setToolbarQuery] = useState('');
   // "No results" popup (Figma node 469:6139) — opens automatically a beat
   // after the toolbar search settles on zero matches, so it doesn't flash
-  // open on every single keystroke while the user is still typing.
+  // open on every single keystroke while the user is still typing. Its
+  // "found" counterpart (same Figma node, opposite case) opens instead when
+  // the query matches someone in the broader registered-patients master
+  // list even though they aren't on today's/tomorrow's schedule.
   const [notFoundOpen, setNotFoundOpen] = useState(false);
+  const [foundOpen, setFoundOpen] = useState(false);
+  const [foundPatient, setFoundPatient] = useState(null);
   const [apptSortAsc, setApptSortAsc] = useState(true);
   // Remark is a two-way chat thread (Receptionist <-> Doctor) per patient
   // now, not a single free-text field — seeded from the mock data's
@@ -444,8 +450,16 @@ export default function TodaysPatient() {
 
   // "Buat Appointment" popup opened from the toolbar's "Appointment" button —
   // finds an already-registered patient, then books their appointment
-  // (doctor/room/keluhan/duration/date/time).
+  // (doctor/room/keluhan/duration/date/time). It also opens (pre-filled,
+  // skipping the search step) from PatientFoundDialog's "Appointment" CTA —
+  // `appointmentPreselect` carries that patient across in that case.
   const [appointmentDialogOpen, setAppointmentDialogOpen] = useState(false);
+  const [appointmentPreselect, setAppointmentPreselect] = useState(null);
+
+  function handleBookFoundAppointment(patient) {
+    setAppointmentPreselect(patient);
+    setAppointmentDialogOpen(true);
+  }
 
   function handleSaveRoomLabSettings(nextSettings) {
     setRoomLabSettings(nextSettings);
@@ -515,16 +529,55 @@ export default function TodaysPatient() {
     return !daySource.some((p) => matchesToolbarQuery(p, trimmed));
   }, [toolbarQuery, daySource]);
 
-  // Debounce opening the popup so it doesn't flash open after every single
-  // keystroke while the user is still mid-typing a query that will match.
+  // The broader "already registered" directory — runtime registrations
+  // merged with the seeded mock roster from the Appointment dialog — used
+  // to tell "never registered" apart from "registered, just not scheduled
+  // today/tomorrow" when the toolbar search comes up empty against daySource.
+  const registeredMasterList = useMemo(
+    () => [...registeredPatients, ...REGISTERED_PATIENTS],
+    [registeredPatients]
+  );
+
+  function matchesRegisteredQuery(patient, trimmedLowerQuery) {
+    return (
+      patient.name.toLowerCase().includes(trimmedLowerQuery) ||
+      patient.mrn?.toLowerCase().includes(trimmedLowerQuery) ||
+      patient.phone?.toLowerCase().replace(/-/g, '').includes(trimmedLowerQuery.replace(/-/g, ''))
+    );
+  }
+
+  // Only meaningful once toolbarHasNoMatch is true — the patient (if any)
+  // from the broader registered directory that the query matches instead.
+  const matchedRegisteredPatient = useMemo(() => {
+    if (!toolbarHasNoMatch) return null;
+    const trimmed = toolbarQuery.trim().toLowerCase();
+    if (!trimmed) return null;
+    return registeredMasterList.find((p) => matchesRegisteredQuery(p, trimmed)) ?? null;
+  }, [toolbarHasNoMatch, toolbarQuery, registeredMasterList]);
+
+  // Debounce opening either popup so it doesn't flash open after every
+  // single keystroke while the user is still mid-typing a query that will
+  // match. Found-but-not-scheduled takes the "already registered" popup;
+  // no match anywhere keeps the original "not yet registered" popup.
   useEffect(() => {
     if (!toolbarHasNoMatch) {
       setNotFoundOpen(false);
+      setFoundOpen(false);
+      setFoundPatient(null);
       return;
     }
-    const timer = setTimeout(() => setNotFoundOpen(true), 500);
+    const timer = setTimeout(() => {
+      if (matchedRegisteredPatient) {
+        setFoundPatient(matchedRegisteredPatient);
+        setFoundOpen(true);
+        setNotFoundOpen(false);
+      } else {
+        setNotFoundOpen(true);
+        setFoundOpen(false);
+      }
+    }, 500);
     return () => clearTimeout(timer);
-  }, [toolbarHasNoMatch, toolbarQuery]);
+  }, [toolbarHasNoMatch, toolbarQuery, matchedRegisteredPatient]);
 
   return (
     <AnimatePresence mode="wait" initial={false}>
@@ -873,11 +926,21 @@ export default function TodaysPatient() {
             onOpenChange={setDetailOpen}
           />
           <PatientNotFoundDialog open={notFoundOpen} onOpenChange={setNotFoundOpen} />
+          <PatientFoundDialog
+            open={foundOpen}
+            onOpenChange={setFoundOpen}
+            patient={foundPatient}
+            onBookAppointment={handleBookFoundAppointment}
+          />
           <MakeAppointmentDialog
             open={appointmentDialogOpen}
-            onOpenChange={setAppointmentDialogOpen}
+            onOpenChange={(next) => {
+              setAppointmentDialogOpen(next);
+              if (!next) setAppointmentPreselect(null);
+            }}
             onBooked={addPatientRow}
             extraPatients={registeredPatients}
+            preselectedPatient={appointmentPreselect}
           />
           <SettingRoomLabDialog
             open={roomLabSettingOpen}
