@@ -531,53 +531,39 @@ export default function TodaysPatient() {
     setDetailOpen(true);
   }
 
-  function matchesToolbarQuery(patient, trimmedLowerQuery) {
-    const patientCode = `P-${String(patient.id).padStart(4, '0')}`.toLowerCase();
-    return (
-      patient.name.toLowerCase().includes(trimmedLowerQuery) ||
-      patientCode.includes(trimmedLowerQuery) ||
-      String(patient.id).includes(trimmedLowerQuery) ||
-      patient.phone?.toLowerCase().replace(/-/g, '').includes(trimmedLowerQuery.replace(/-/g, ''))
-    );
-  }
-
   // The day's full roster before any search/name filtering — scoped down to
-  // just this doctor's own patients when acting as Doctor, so the table,
-  // the "Showing X of Y" count, and the not-found check all agree on what
-  // "the list" means for this login.
+  // just this doctor's own patients when acting as Doctor, so the table and
+  // the "Showing X of Y" count agree on what "the list" means for this
+  // login.
   const daySource = useMemo(() => {
     const base = dayFilter === 'Tomorrow' ? tomorrowPatients : todayPatients;
     return isDoctor ? base.filter((p) => p.dokter === doctorName) : base;
   }, [dayFilter, isDoctor, doctorName, todayPatients, tomorrowPatients]);
 
+  // Only the Patient Name column's own search (the magnifying-glass popover
+  // in the table header) filters this table — it's the tool for finding
+  // someone who already has an appointment today/tomorrow. The toolbar
+  // search above the table is a separate, deliberately disconnected tool:
+  // it doesn't touch this list at all, see the effect below.
   const visiblePatients = useMemo(() => {
     const byName = nameQuery.trim()
       ? daySource.filter((p) => p.name.toLowerCase().includes(nameQuery.trim().toLowerCase()))
       : daySource;
 
-    const toolbarTrimmed = toolbarQuery.trim().toLowerCase();
-    const byToolbar = toolbarTrimmed
-      ? byName.filter((p) => matchesToolbarQuery(p, toolbarTrimmed))
-      : byName;
-
-    return [...byToolbar].sort((a, b) =>
+    return [...byName].sort((a, b) =>
       apptSortAsc ? a.appt.localeCompare(b.appt) : b.appt.localeCompare(a.appt)
     );
-  }, [daySource, nameQuery, toolbarQuery, apptSortAsc]);
+  }, [daySource, nameQuery, apptSortAsc]);
 
-  // Whether the toolbar search alone (name / ID / phone, independent of the
-  // Patient Name column's own search) has zero matches in the current
-  // Today/Tomorrow list — drives the "Patient not yet registered" popup.
-  const toolbarHasNoMatch = useMemo(() => {
-    const trimmed = toolbarQuery.trim().toLowerCase();
-    if (!trimmed) return false;
-    return !daySource.some((p) => matchesToolbarQuery(p, trimmed));
-  }, [toolbarQuery, daySource]);
-
-  // The broader "already registered" directory — runtime registrations
-  // merged with the seeded mock roster from the Appointment dialog — used
-  // to tell "never registered" apart from "registered, just not scheduled
-  // today/tomorrow" when the toolbar search comes up empty against daySource.
+  // The broader patient database — runtime registrations merged with the
+  // seeded mock roster from the Appointment dialog — is what the toolbar
+  // search (Cari Pasien / ID Patient / Nomor Telp) looks up against. It's
+  // intentionally independent of daySource/visiblePatients: the table
+  // already has its own search (Patient Name column) for "who's on
+  // today's/tomorrow's schedule". The toolbar's only job is "is this person
+  // in our patient database at all" — always answered with one of the two
+  // popups below, regardless of whether they also happen to be on today's
+  // or tomorrow's list already.
   const registeredMasterList = useMemo(
     () => [...registeredPatients, ...REGISTERED_PATIENTS],
     [registeredPatients]
@@ -591,21 +577,21 @@ export default function TodaysPatient() {
     );
   }
 
-  // Only meaningful once toolbarHasNoMatch is true — the patient (if any)
-  // from the broader registered directory that the query matches instead.
   const matchedRegisteredPatient = useMemo(() => {
-    if (!toolbarHasNoMatch) return null;
     const trimmed = toolbarQuery.trim().toLowerCase();
     if (!trimmed) return null;
     return registeredMasterList.find((p) => matchesRegisteredQuery(p, trimmed)) ?? null;
-  }, [toolbarHasNoMatch, toolbarQuery, registeredMasterList]);
+  }, [toolbarQuery, registeredMasterList]);
 
   // Debounce opening either popup so it doesn't flash open after every
-  // single keystroke while the user is still mid-typing a query that will
-  // match. Found-but-not-scheduled takes the "already registered" popup;
-  // no match anywhere keeps the original "not yet registered" popup.
+  // single keystroke while the user is still mid-typing. Matched against
+  // the patient database → "already registered" popup; no match anywhere
+  // in the database → "not yet registered" popup. Fires purely off
+  // toolbarQuery/the patient database now — the current day's table
+  // (daySource/visiblePatients) is never consulted here.
   useEffect(() => {
-    if (!toolbarHasNoMatch) {
+    const trimmed = toolbarQuery.trim();
+    if (!trimmed) {
       setNotFoundOpen(false);
       setFoundOpen(false);
       setFoundPatient(null);
@@ -622,7 +608,7 @@ export default function TodaysPatient() {
       }
     }, 500);
     return () => clearTimeout(timer);
-  }, [toolbarHasNoMatch, toolbarQuery, matchedRegisteredPatient]);
+  }, [toolbarQuery, matchedRegisteredPatient]);
 
   return (
     <AnimatePresence mode="wait" initial={false}>
