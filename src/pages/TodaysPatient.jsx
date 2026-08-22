@@ -59,10 +59,14 @@ import roomsLabsIcon from '@/assets/rooms-labs-icon.png';
 import { useRole } from '@/context/role-context';
 import { usePatientStatus } from '@/context/patient-status-context';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/lib/supabase';
 
-// Ids assigned to rows created at runtime (new registrations / bookings) —
-// starts well above the seeded mock ids (today's go up to 21, tomorrow's up
-// to 112) so a freshly-added row never collides with an existing one.
+// Ids assigned to rows created at runtime (new registrations / bookings
+// made in-session, not yet persisted to Supabase — see the "Belum
+// dipersist ke database" note on addPatientRow below) — starts well above
+// the real appointment ids coming back from the database (currently in
+// the low tens after the pilot seed) so a freshly-added local row never
+// collides with a real one.
 let nextRuntimePatientId = 500;
 
 const STATUS_STYLES = {
@@ -74,58 +78,10 @@ const STATUS_STYLES = {
   'Waiting 20 Min': 'border-transparent bg-[rgba(249,115,22,0.08)] text-[#f97316]',
 };
 
-// Full 21-row list matching Figma node 576:3192 exactly (names, times,
-// status and remarks all taken 1:1 from the reference frame). `mr` is
-// the MR column icon variant (1 = rare filled badge, 2 = common
-// double-check, 3 = triple/wave check) matching node 583:4809 —
-// distribution mirrors the asset frequency seen across the 21 rows.
-const MOCK_PATIENTS = [
-  { id: 1, mr: 1, appt: '08:30', name: 'Agung Wijaya Kusuma', category: 'VIP', dokter: 'drg. SM', room: 'R1', keluhan: 'Gigi Ngilu / Sensitive', durasi: '45 Min', status: 'Complete', lab: 'OK', remark: 'Pasien sudah mengeluh ingin segera di treatment', phone: '0813-2037-6091'  },
-  { id: 2, mr: 2, appt: '08:45', name: 'Siti Rahmawati', category: 'Regular', dokter: 'drg. AN', room: 'R2', keluhan: 'Gigi Berlubang', durasi: '60 Min', status: 'Waiting 10 Min', lab: 'OK', remark: 'Pasien Kondusif', phone: '0821-2074-6182'  },
-  { id: 3, mr: 3, appt: '09:00', name: 'Budi Santoso', category: 'Regular', dokter: 'drg. SM', room: 'R1', keluhan: 'Scaling', durasi: '45 Min', status: 'Late', lab: 'NOK', remark: 'Pasien Telat Datang', phone: '0822-2111-6273'  },
-  { id: 4, mr: 2, appt: '09:15', name: 'Dewi Lestari', category: 'VVIP', dokter: 'drg. RF', room: 'R3', keluhan: 'Sakit Gigi', durasi: '60 Min', status: 'Cancel', lab: 'NOK', remark: 'Pasien Kondusif', phone: '0851-2148-6364'  },
-  { id: 5, mr: 2, appt: '09:30', name: 'Andi Pratama', category: 'Regular', dokter: 'drg. AN', room: 'R2', keluhan: 'Tambal Gigi', durasi: '45 Min', status: 'Waiting 10 Min', lab: 'OK', remark: 'Waktu tunggu meningkat, berpotensi menghambat antrian', phone: '0852-2185-6455'  },
-  { id: 6, mr: 2, appt: '09:45', name: 'Rina Marlina', category: 'VIP', dokter: 'drg. SM', room: 'R1', keluhan: 'Gigi Sensitif', durasi: '30 Min', status: 'Waiting 20 Min', lab: 'OK', remark: 'Proses berjalan sesuai estimasi, antrian kondusif', phone: '0895-2222-6546'  },
-  { id: 7, mr: 3, appt: '10:00', name: 'Fajar Hidayat', category: 'Regular', dokter: 'drg. RF', room: 'R3', keluhan: 'Cabut Gigi', durasi: '60 Min', status: 'Waiting 10 Min', lab: 'OK', remark: 'Pasien belum dipanggil, antrian mulai padat', phone: '0896-2259-6637'  },
-  { id: 8, mr: 2, appt: '10:15', name: 'Nur Aisyah', category: 'Regular', dokter: 'drg. AN', room: 'R2', keluhan: 'Karang Gigi', durasi: '45 Min', status: 'Waiting 20 Min', lab: 'OK', remark: 'Pasien Kondusif', phone: '0812-2296-6728'  },
-  { id: 9, mr: 2, appt: '10:30', name: 'Dimas Saputra', category: 'Regular', dokter: 'drg. SM', room: 'R1', keluhan: 'Gigi Berlubang', durasi: '60 Min', status: 'Waiting 20 Min', lab: 'OK', remark: 'Pasien sudah mengeluh ingin segera di treatment', phone: '0813-2333-6819'  },
-  { id: 10, mr: 2, appt: '10:45', name: 'Maya Sari', category: 'Regular', dokter: 'drg. RF', room: 'R3', keluhan: 'Konsultasi', durasi: '30 Min', status: 'Late', lab: 'NOK', remark: 'Pasien Telat Datang', phone: '0821-2370-6910'  },
-  { id: 11, mr: 2, appt: '11:00', name: 'Rizky Ramadhan', category: 'Regular', dokter: 'drg. AN', room: 'R2', keluhan: 'Sakit Gusi', durasi: '45 Min', status: 'Cancel', lab: 'NOK', remark: 'Pasien cancel', phone: '0822-2407-7001'  },
-  { id: 12, mr: 2, appt: '11:15', name: 'Putri Amelia', category: 'VIP', dokter: 'drg. SM', room: 'R1', keluhan: 'Whitening', durasi: '90 Min', status: 'Waiting 20 Min', lab: 'OK', remark: 'Pasien Kondusif', phone: '0851-2444-7092'  },
-  { id: 13, mr: 2, appt: '11:30', name: 'Arif Setiawan', category: 'Regular', dokter: 'drg. RF', room: 'R3', keluhan: 'Gigi Patah', durasi: '60 Min', status: 'Waiting 10 Min', lab: 'OK', remark: 'Pasien Kondusif', phone: '0852-2481-7183'  },
-  { id: 14, mr: 2, appt: '11:45', name: 'Lina Wulandari', category: 'Regular', dokter: 'drg. AN', room: 'R2', keluhan: 'Scaling', durasi: '45 Min', status: 'Waiting 10 Min', lab: 'OK', remark: 'Pasien Kondusif', phone: '0895-2518-7274'  },
-  { id: 15, mr: 2, appt: '12:00', name: 'Yoga Pratama', category: 'Regular', dokter: 'drg. SM', room: 'R1', keluhan: 'Tambal Gigi', durasi: '45 Min', status: 'Waiting 20 Min', lab: 'OK', remark: 'Waktu tunggu meningkat, berpotensi menghambat antrian', phone: '0896-2555-7365'  },
-  { id: 16, mr: 3, appt: '13:00', name: 'Intan Permata', category: 'VVIP', dokter: 'drg. RF', room: 'R3', keluhan: 'Gigi Ngilu', durasi: '30 Min', status: 'Waiting 20 Min', lab: 'OK', remark: 'Pasien sudah mengeluh ingin segera di treatment', phone: '0812-2592-7456'  },
-  { id: 17, mr: 2, appt: '13:15', name: 'Wahyu Nugroho', category: 'Regular', dokter: 'drg. AN', room: 'R2', keluhan: 'Gigi Berlubang', durasi: '60 Min', status: 'Waiting 20 Min', lab: 'OK', remark: 'Pasien belum dipanggil, antrian mulai padat', phone: '0813-2629-7547'  },
-  { id: 18, mr: 2, appt: '13:30', name: 'Nadia Putri', category: 'Regular', dokter: 'drg. SM', room: 'R1', keluhan: 'Konsultasi', durasi: '30 Min', status: 'Waiting 20 Min', lab: 'OK', remark: 'Pasien Kondusif', phone: '0821-2666-7638'  },
-  { id: 19, mr: 2, appt: '13:45', name: 'Ilham Maulana', category: 'Regular', dokter: 'drg. RF', room: 'R3', keluhan: 'Cabut Gigi', durasi: '60 Min', status: 'Waiting 20 Min', lab: 'OK', remark: 'Pasien Kondusif', phone: '0822-2703-7729'  },
-  { id: 20, mr: 2, appt: '14:00', name: 'Vina Oktaviani', category: 'Regular', dokter: 'drg. AN', room: 'R2', keluhan: 'Karang Gigi', durasi: '45 Min', status: 'Waiting 20 Min', lab: 'OK', remark: 'Pasien Kondusif', phone: '0851-2740-7820'  },
-  { id: 21, mr: 2, appt: '14:15', name: 'Reza Kurniawan', category: 'Regular', dokter: 'drg. SM', room: 'R1', keluhan: 'Sakit Gigi', durasi: '60 Min', status: 'Waiting 20 Min', lab: 'OK', remark: 'Pasien Kondusif', phone: '0852-2777-7911'  },
-];
-
-// Tomorrow's schedule — a different set of booked patients. None of these
-// appointments have happened yet, so there is no Complete/Late/Waiting
-// status to show; the Status column renders "-" for every row instead
-// (handled in the Status cell below, keyed off `dayFilter`). Room and Lab
-// haven't been assigned yet either, so both are seeded as "-" directly in
-// the mock data. Remark is seeded as "-" too, but — unlike Room/Lab — it
-// stays a free-text field (the Remark textarea below is always editable,
-// for both Today and Tomorrow), so staff can still type a note in ahead
-// of the appointment.
-const MOCK_PATIENTS_TOMORROW = [
-  { id: 101, mr: 2, appt: '08:00', name: 'Hendra Gunawan', category: 'Regular', dokter: 'drg. SM', room: '-', keluhan: 'Kontrol Kawat Gigi', durasi: '30 Min', status: null, lab: '-', remark: '-', phone: '0852-5737-6191'  },
-  { id: 102, mr: 1, appt: '08:30', name: 'Melati Suryani', category: 'VIP', dokter: 'drg. AN', room: '-', keluhan: 'Cabut Gigi Bungsu', durasi: '90 Min', status: null, lab: '-', remark: '-', phone: '0895-5774-6282'  },
-  { id: 103, mr: 2, appt: '09:00', name: 'Bayu Kusnandar', category: 'Regular', dokter: 'drg. RF', room: '-', keluhan: 'Gigi Berlubang', durasi: '45 Min', status: null, lab: '-', remark: '-', phone: '0896-5811-6373'  },
-  { id: 104, mr: 3, appt: '09:30', name: 'Citra Dewanti', category: 'VVIP', dokter: 'drg. SM', room: '-', keluhan: 'Whitening', durasi: '90 Min', status: null, lab: '-', remark: '-', phone: '0812-5848-6464'  },
-  { id: 105, mr: 2, appt: '10:00', name: 'Doni Firmansyah', category: 'Regular', dokter: 'drg. AN', room: '-', keluhan: 'Scaling', durasi: '45 Min', status: null, lab: '-', remark: '-', phone: '0813-5885-6555'  },
-  { id: 106, mr: 2, appt: '10:30', name: 'Eka Purnama', category: 'Regular', dokter: 'drg. RF', room: '-', keluhan: 'Sakit Gusi', durasi: '30 Min', status: null, lab: '-', remark: '-', phone: '0821-5922-6646'  },
-  { id: 107, mr: 2, appt: '11:00', name: 'Galih Prasetyo', category: 'Regular', dokter: 'drg. SM', room: '-', keluhan: 'Tambal Gigi', durasi: '45 Min', status: null, lab: '-', remark: '-', phone: '0822-5959-6737'  },
-  { id: 108, mr: 2, appt: '11:30', name: 'Herlina Wati', category: 'VIP', dokter: 'drg. AN', room: '-', keluhan: 'Konsultasi Behel', durasi: '30 Min', status: null, lab: '-', remark: '-', phone: '0851-5996-6828'  },
-  { id: 109, mr: 2, appt: '13:00', name: 'Indra Gunawan', category: 'Regular', dokter: 'drg. RF', room: '-', keluhan: 'Gigi Ngilu', durasi: '45 Min', status: null, lab: '-', remark: '-', phone: '0852-6033-6919'  },
-  { id: 110, mr: 2, appt: '13:30', name: 'Jasmine Anggraini', category: 'Regular', dokter: 'drg. SM', room: '-', keluhan: 'Karang Gigi', durasi: '45 Min', status: null, lab: '-', remark: '-', phone: '0895-6070-7010'  },
-  { id: 111, mr: 2, appt: '14:00', name: 'Krisna Ardiansyah', category: 'Regular', dokter: 'drg. AN', room: '-', keluhan: 'Cabut Gigi', durasi: '60 Min', status: null, lab: '-', remark: '-', phone: '0896-6107-7101'  },
-  { id: 112, mr: 2, appt: '14:30', name: 'Lestari Handayani', category: 'Regular', dokter: 'drg. RF', room: '-', keluhan: 'Sakit Gigi', durasi: '60 Min', status: null, lab: '-', remark: '-', phone: '0812-6144-7192'  },
-];
+// The day's rosters (today / tomorrow) now come from Supabase — see the
+// fetch effect below — instead of the hardcoded MOCK_PATIENTS /
+// MOCK_PATIENTS_TOMORROW arrays this page used before the pilot migration
+// to real data (patients + appointments tables).
 
 // Column widths as percentages of the table, proportional to Figma node
 // 576:3192's `.Table Heading` frame widths (43/47/80/180/80/80/160/80/
@@ -297,12 +253,19 @@ export default function TodaysPatient() {
   }, [showSkeleton]);
 
   const [dayFilter, setDayFilter] = useState('Today');
-  // Lifted from module-level consts into state — Registration's "New
-  // Registration"/"make an appointment" flows and the standalone "+
-  // Appointment" dialog both need to actually add a row here once they
-  // finish, not just show a success toast and leave the table unchanged.
-  const [todayPatients, setTodayPatients] = useState(MOCK_PATIENTS);
-  const [tomorrowPatients, setTomorrowPatients] = useState(MOCK_PATIENTS_TOMORROW);
+  // Today's/tomorrow's rosters — populated from Supabase (appointments
+  // joined with patients) by the fetch effect below, not from a hardcoded
+  // mock array anymore. Starts empty; `loadingPatients` distinguishes
+  // "still loading" from "genuinely zero appointments" in the empty-state
+  // row further down. Registration's "New Registration"/"make an
+  // appointment" flows and the standalone "+ Appointment" dialog still add
+  // rows straight into this state once they finish (see addPatientRow) —
+  // that part hasn't changed, it just now starts from real data instead of
+  // a mock seed.
+  const [todayPatients, setTodayPatients] = useState([]);
+  const [tomorrowPatients, setTomorrowPatients] = useState([]);
+  const [loadingPatients, setLoadingPatients] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [nameSearchOpen, setNameSearchOpen] = useState(false);
@@ -321,19 +284,12 @@ export default function TodaysPatient() {
   const [foundPatient, setFoundPatient] = useState(null);
   const [apptSortAsc, setApptSortAsc] = useState(true);
   // Remark is a two-way chat thread (Receptionist <-> Doctor) per patient
-  // now, not a single free-text field — seeded from the mock data's
-  // original remark string as the opening message from Receptionist, keyed
-  // by patient id so the thread survives sorting/filtering/switching days.
-  const [remarkThreads, setRemarkThreads] = useState(() =>
-    Object.fromEntries(
-      [...MOCK_PATIENTS, ...MOCK_PATIENTS_TOMORROW].map((p) => [
-        p.id,
-        p.remark && p.remark !== '-'
-          ? [{ id: `${p.id}-seed`, sender: 'Receptionist', text: p.remark, time: p.appt }]
-          : [],
-      ])
-    )
-  );
+  // now, not a single free-text field — seeded from each appointment's
+  // `remark` column (fetched from Supabase) as the opening message from
+  // Receptionist, keyed by patient id so the thread survives
+  // sorting/filtering/switching days. Starts empty and gets filled in by
+  // the fetch effect below once the initial load lands.
+  const [remarkThreads, setRemarkThreads] = useState({});
 
   function handleSendRemark(patientId, text) {
     setRemarkThreads((prev) => ({
@@ -353,12 +309,97 @@ export default function TodaysPatient() {
   // roster. Keyed by id to avoid double-adding the same patient twice.
   const [registeredPatients, setRegisteredPatients] = useState([]);
 
+  // Loads today's/tomorrow's rosters from Supabase — appointments joined
+  // with their patient — replacing the old MOCK_PATIENTS /
+  // MOCK_PATIENTS_TOMORROW arrays. This is the "pilot migration" for
+  // Today's Patient: reads now come from the real database (see
+  // supabase-seed-todays-patient.sql for the one-time seed that mirrors
+  // the original mock roster into real rows). Writes made *during* a
+  // session — New Registration, "+ Appointment" — are NOT persisted back
+  // to Supabase yet; they still only update local state via
+  // addPatientRow below, same as before this migration. That write-path
+  // (and wiring Registration.jsx itself to Supabase) is a follow-up step,
+  // since it also needs to resolve "is this a brand-new patient or an
+  // existing one" against real patient ids rather than the mock rosters
+  // used today.
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadAppointments() {
+      setLoadingPatients(true);
+      setLoadError(null);
+      const { data, error } = await supabase
+        .from('appointments')
+        .select(
+          'id, appt_date, appt_time, dokter, room, keluhan, durasi, status, lab, remark, patients(name, category, phone)'
+        )
+        .order('appt_time', { ascending: true });
+
+      if (cancelled) return;
+
+      if (error) {
+        console.error('Failed to load appointments from Supabase', error);
+        setLoadError(error.message);
+        setLoadingPatients(false);
+        toast.error('Gagal memuat data pasien dari database.');
+        return;
+      }
+
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const tomorrowStr = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const nextToday = [];
+      const nextTomorrow = [];
+      const nextThreads = {};
+
+      for (const row of data ?? []) {
+        // mr (the MR column's badge variant) is purely decorative and
+        // isn't part of the schema — every real row defaults to the most
+        // common variant (2) rather than encoding it in the database.
+        const mapped = {
+          id: row.id,
+          mr: 2,
+          appt: row.appt_time,
+          name: row.patients?.name ?? '(Tidak diketahui)',
+          category: row.patients?.category ?? 'Regular',
+          dokter: row.dokter,
+          room: row.room,
+          keluhan: row.keluhan,
+          durasi: row.durasi,
+          status: row.status,
+          lab: row.lab,
+          remark: row.remark,
+          phone: row.patients?.phone ?? '',
+        };
+        nextThreads[row.id] =
+          row.remark && row.remark !== '-'
+            ? [{ id: `${row.id}-seed`, sender: 'Receptionist', text: row.remark, time: row.appt_time }]
+            : [];
+
+        if (row.appt_date === todayStr) nextToday.push(mapped);
+        else if (row.appt_date === tomorrowStr) nextTomorrow.push(mapped);
+      }
+
+      setTodayPatients(nextToday);
+      setTomorrowPatients(nextTomorrow);
+      setRemarkThreads((prev) => ({ ...nextThreads, ...prev }));
+      setLoadingPatients(false);
+    }
+
+    loadAppointments();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Adds a freshly registered/booked patient straight into the table —
   // used by both the "New Registration" flow (arrives via router state
   // after navigating back from /registration) and the standalone "+
   // Appointment" dialog (same page, called directly). `bucket` decides
   // whether it lands under Today or Tomorrow, matching whichever tab the
-  // appointment's own date actually falls on.
+  // appointment's own date actually falls on. NOTE: this only updates
+  // local state — see the fetch effect above for why the write side isn't
+  // wired to Supabase yet, so a page refresh currently loses rows added
+  // this way (same limitation the mock-data version already had).
   function addPatientRow(row, bucket) {
     const withId = { ...row, id: row.id ?? nextRuntimePatientId++ };
     if (bucket === 'tomorrow') {
@@ -374,9 +415,13 @@ export default function TodaysPatient() {
   // state (it's a full page, not a modal, so it can't just call a prop).
   // Consumed once on arrival, then cleared from history state so refreshing
   // or navigating back to this page doesn't re-add the same row again.
+  // Waits for the initial Supabase fetch to land first (`loadingPatients`)
+  // so this local addition doesn't get wiped out by that fetch's
+  // setTodayPatients/setTomorrowPatients landing afterwards.
   useEffect(() => {
     const incoming = location.state?.newPatient;
     if (!incoming) return;
+    if (loadingPatients) return;
     const added = addPatientRow(incoming, location.state?.bucket ?? 'today');
     setRegisteredPatients((prev) =>
       prev.some((p) => p.id === added.id)
@@ -395,7 +440,7 @@ export default function TodaysPatient() {
     toast.success(`${incoming.name} ditambahkan ke ${location.state?.bucket === 'tomorrow' ? "Tomorrow's" : "Today's"} Patient`);
     navigate(location.pathname, { replace: true, state: {} });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.state]);
+  }, [location.state, loadingPatients]);
 
   // Status is editable by both Doctor and Receptionist now, but each only
   // owns half of it: Doctor moves the clinical side forward (In Treatment /
@@ -911,7 +956,11 @@ export default function TodaysPatient() {
                   {visiblePatients.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={12} className="h-16 text-left text-[#64748b]">
-                        Tidak ada pasien dengan nama tersebut.
+                        {loadingPatients
+                          ? 'Memuat data pasien...'
+                          : loadError
+                            ? `Gagal memuat data pasien: ${loadError}`
+                            : 'Tidak ada pasien dengan nama tersebut.'}
                       </TableCell>
                     </TableRow>
                   )}

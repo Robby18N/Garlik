@@ -95,7 +95,7 @@ create table appointments (
   room          text,
   keluhan       text,
   durasi        text,                 -- 'Est. 30 Min'
-  status        text not null default 'Waiting 10 Min',
+  status        text,                 -- null untuk appointment besok yang belum berjalan
   lab           text,
   remark        text,
   created_at    timestamptz not null default now()
