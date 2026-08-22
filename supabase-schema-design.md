@@ -64,15 +64,6 @@ create table patients (
   created_at         timestamptz not null default now()
 );
 
--- lastVisit & totalVisits di mock adalah data turunan (derived) dari
--- clinical_notes — sebaiknya dihitung via view, bukan disimpan dobel:
-create view patients_with_stats as
-select
-  p.*,
-  (select max(cn.visit_date) from clinical_notes cn where cn.patient_id = p.id) as last_visit,
-  (select count(*) from clinical_notes cn where cn.patient_id = p.id) as total_visits
-from patients p;
-
 -- ============================================================
 -- 3. RIWAYAT KLINIS (visitHistory di Records.jsx / ClinicalTab)
 -- ============================================================
@@ -273,6 +264,21 @@ create policy "doctor_own_prescriptions" on prescriptions
 ```
 
 Pola yang sama (Admin penuh, Doctor terbatas ke datanya sendiri, Receptionist sesuai `ROLE_ACCESS`) perlu direplikasi ke tabel lain sesuai daftar akses yang sudah didefinisikan di `app-sidebar.jsx`.
+
+## View turunan (dibuat paling akhir)
+
+`patients_with_stats` butuh tabel `patients` DAN `clinical_notes` supaya bisa dibuat — jadi ditaruh di sini, setelah semua tabel di atas ada, bukan di dekat tabel `patients` di section 2 (itu bug yang menyebabkan error `relation "clinical_notes" does not exist` kalau script dijalankan urut dari atas).
+
+```sql
+-- lastVisit & totalVisits di mock adalah data turunan (derived) dari
+-- clinical_notes — sebaiknya dihitung via view, bukan disimpan dobel:
+create view patients_with_stats as
+select
+  p.*,
+  (select max(cn.visit_date) from clinical_notes cn where cn.patient_id = p.id) as last_visit,
+  (select count(*) from clinical_notes cn where cn.patient_id = p.id) as total_visits
+from patients p;
+```
 
 ## Yang TIDAK dimasukkan dulu
 
