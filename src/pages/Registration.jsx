@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Upload, Moon, Bell, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Upload, Moon, Bell, ChevronRight, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -18,13 +18,8 @@ import {
   FieldRow,
 } from '@/components/form-fields';
 import { resolveDayBucket } from '@/lib/utils';
-
-// Ids assigned to patients registered here — kept in its own range from
-// Today's Patient's own runtime counter (both just need to avoid colliding
-// with the 1-21 / 101-112 seeded mock ids; each file keeps its own counter
-// since a fresh page load of Registration doesn't share module state with
-// TodaysPatient anyway).
-let nextRegisteredId = 800;
+import { supabase } from '@/lib/supabase';
+import { generateNextMrn } from '@/lib/patients';
 
 // "HH:MM" for a walk-in registration's Appt column (no appointment was
 // actually booked) — same hand-rolled format used everywhere else in the
@@ -176,6 +171,7 @@ export default function Registration() {
   const [patientData, setPatientData] = useState(initialPatientData);
   const [medicalData, setMedicalData] = useState(initialMedicalData);
   const [conditions, setConditions] = useState({});
+  const [saving, setSaving] = useState(false);
 
   function updatePatient(field, value) {
     setPatientData((prev) => ({ ...prev, [field]: value }));
@@ -228,11 +224,28 @@ export default function Registration() {
     handleSave();
   }
 
-  function handleSave() {
-    const fullName = `${patientData.firstName} ${patientData.lastName}`.trim();
-    let newPatient;
-    let bucket = 'today';
+  // Age isn't collected directly — it's derived from Birth Date, same idea
+  // as patients_with_stats deriving lastVisit/totalVisits instead of
+  // storing them redundantly. Returns null when no birth date was entered
+  // (the field isn't required).
+  function computeAge(birthDateStr) {
+    if (!birthDateStr) return null;
+    const dob = new Date(`${birthDateStr}T00:00:00`);
+    if (Number.isNaN(dob.getTime())) return null;
+    const now = new Date();
+    let age = now.getFullYear() - dob.getFullYear();
+    const hadBirthdayThisYear =
+      now.getMonth() > dob.getMonth() ||
+      (now.getMonth() === dob.getMonth() && now.getDate() >= dob.getDate());
+    if (!hadBirthdayThisYear) age -= 1;
+    return age;
+  }
 
+  async function handleSave() {
+    if (saving) return;
+    const fullName = `${patientData.firstName} ${patientData.lastName}`.trim();
+
+    let appointmentFields = null;
     if (isAppointmentFlow) {
       const required = [
         ['appointmentDoctor', 'Doctor'],
@@ -245,13 +258,10 @@ export default function Registration() {
         toast.error(`Please fill in ${missing[1]}`);
         return;
       }
-      bucket = resolveDayBucket(patientData.appointmentDate);
-      newPatient = {
-        id: nextRegisteredId++,
-        mr: 2,
-        appt: patientData.appointmentTime,
-        name: fullName,
-        category: patientData.category || 'Regular',
+      const bucket = resolveDayBucket(patientData.appointmentDate);
+      appointmentFields = {
+        appt_date: patientData.appointmentDate,
+        appt_time: patientData.appointmentTime,
         dokter: patientData.appointmentDoctor,
         room: patientData.appointmentRoom,
         keluhan: patientData.appointmentKeluhan || '-',
@@ -259,21 +269,16 @@ export default function Registration() {
         status: bucket === 'today' ? 'Waiting 10 Min' : null,
         lab: '-',
         remark: '-',
-        phone: patientData.phone1,
       };
-      toast.success('Patient registered and appointment booked successfully');
     } else {
       // A plain walk-in registration has no doctor/room/appointment info at
       // all (those fields only exist in the appointment flow's step 3), so
       // it still lands in Today's list — that's where the receptionist is
       // working from — but with placeholder clinical fields until an
       // appointment is actually booked for this patient separately.
-      newPatient = {
-        id: nextRegisteredId++,
-        mr: 2,
-        appt: nowTimeLabel(),
-        name: fullName,
-        category: patientData.category || 'Regular',
+      appointmentFields = {
+        appt_date: new Date().toISOString().slice(0, 10),
+        appt_time: nowTimeLabel(),
         dokter: '-',
         room: '-',
         keluhan: 'Registrasi Baru',
@@ -281,12 +286,55 @@ export default function Registration() {
         status: 'Waiting 10 Min',
         lab: '-',
         remark: '-',
-        phone: patientData.phone1,
       };
-      toast.success('Patient registered successfully');
     }
 
-    navigate('/patients', { state: { newPatient, bucket } });
+    setSaving(true);
+    try {
+      const mrn = await generateNextMrn();
+      const markedConditions = Object.entries(conditions)
+        .filter(([, value]) => value === 'Yes')
+        .map(([field]) => CONDITION_FIELDS.find(([key]) => key === field)?.[1] ?? field);
+
+      const { data: insertedPatient, error: patientError } = await supabase
+        .from('patients')
+        .insert({
+          mrn,
+          name: fullName,
+          category: patientData.category || 'Regular',
+          gender:
+            patientData.sex === 'Male' ? 'Laki-laki' : patientData.sex === 'Female' ? 'Perempuan' : null,
+          age: computeAge(patientData.birthDate),
+          phone: patientData.phone1,
+          address: patientData.street || null,
+          registered_since: new Date().toISOString().slice(0, 10),
+          allergies: medicalData.allergyHistory ? [medicalData.allergyHistory] : [],
+          medical_notes: markedConditions,
+        })
+        .select('id')
+        .single();
+
+      if (patientError) throw patientError;
+
+      const { error: appointmentError } = await supabase.from('appointments').insert({
+        patient_id: insertedPatient.id,
+        ...appointmentFields,
+      });
+
+      if (appointmentError) throw appointmentError;
+
+      toast.success(
+        isAppointmentFlow
+          ? 'Patient registered and appointment booked successfully'
+          : 'Patient registered successfully'
+      );
+      navigate('/patients');
+    } catch (error) {
+      console.error('Failed to save registration to Supabase', error);
+      toast.error('Gagal menyimpan data pasien — coba lagi.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -748,9 +796,11 @@ export default function Registration() {
                     <button
                       type="button"
                       onClick={handleNextFromMedicalRecord}
-                      className="min-h-9 rounded-lg bg-[#16a34a] px-6 py-2.5 text-sm font-medium text-white hover:bg-green-700"
+                      disabled={!isAppointmentFlow && saving}
+                      className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-[#16a34a] px-6 py-2.5 text-sm font-medium text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-70"
                     >
-                      {isAppointmentFlow ? 'Next' : 'Save'}
+                      {!isAppointmentFlow && saving && <Loader2 className="size-4 animate-spin" />}
+                      {isAppointmentFlow ? 'Next' : saving ? 'Saving...' : 'Save'}
                     </button>
                   </div>
                 </div>
@@ -828,9 +878,11 @@ export default function Registration() {
                     <button
                       type="button"
                       onClick={handleSave}
-                      className="min-h-9 rounded-lg bg-[#16a34a] px-6 py-2.5 text-sm font-medium text-white hover:bg-green-700"
+                      disabled={saving}
+                      className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-[#16a34a] px-6 py-2.5 text-sm font-medium text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-70"
                     >
-                      Save
+                      {saving && <Loader2 className="size-4 animate-spin" />}
+                      {saving ? 'Saving...' : 'Save'}
                     </button>
                   </div>
                 </div>

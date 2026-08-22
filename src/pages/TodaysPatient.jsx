@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -51,7 +51,7 @@ import PatientNameHoverCard from '@/components/patient-name-hover-card';
 import PatientDetailSheet from '@/components/patient-detail-sheet';
 import PatientNotFoundDialog from '@/components/patient-not-found-dialog';
 import PatientFoundDialog from '@/components/patient-found-dialog';
-import MakeAppointmentDialog, { REGISTERED_PATIENTS } from '@/components/make-appointment-dialog';
+import MakeAppointmentDialog from '@/components/make-appointment-dialog';
 import SettingRoomLabDialog from '@/components/setting-room-lab-dialog';
 import MrCheckIcon from '@/components/mr-check-icon';
 import TodaysPatientSkeleton from '@/components/todays-patient-skeleton';
@@ -60,14 +60,7 @@ import { useRole } from '@/context/role-context';
 import { usePatientStatus } from '@/context/patient-status-context';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
-
-// Ids assigned to rows created at runtime (new registrations / bookings
-// made in-session, not yet persisted to Supabase — see the "Belum
-// dipersist ke database" note on addPatientRow below) — starts well above
-// the real appointment ids coming back from the database (currently in
-// the low tens after the pilot seed) so a freshly-added local row never
-// collides with a real one.
-let nextRuntimePatientId = 500;
+import { escapeIlike } from '@/lib/patients';
 
 const STATUS_STYLES = {
   Complete: 'border-transparent bg-[rgba(34,197,94,0.08)] text-[#16a34a]',
@@ -254,14 +247,15 @@ export default function TodaysPatient() {
 
   const [dayFilter, setDayFilter] = useState('Today');
   // Today's/tomorrow's rosters — populated from Supabase (appointments
-  // joined with patients) by the fetch effect below, not from a hardcoded
+  // joined with patients) by loadAppointments below, not from a hardcoded
   // mock array anymore. Starts empty; `loadingPatients` distinguishes
   // "still loading" from "genuinely zero appointments" in the empty-state
-  // row further down. Registration's "New Registration"/"make an
-  // appointment" flows and the standalone "+ Appointment" dialog still add
-  // rows straight into this state once they finish (see addPatientRow) —
-  // that part hasn't changed, it just now starts from real data instead of
-  // a mock seed.
+  // row further down. New Registration (a full page nav to /registration,
+  // which writes straight to Supabase and navigates back) and the
+  // standalone "+ Appointment" dialog (which inserts into Supabase itself)
+  // both rely on this page re-fetching afterwards rather than reconstructing
+  // rows locally — see loadAppointments and its use as MakeAppointmentDialog's
+  // onBooked callback below.
   const [todayPatients, setTodayPatients] = useState([]);
   const [tomorrowPatients, setTomorrowPatients] = useState([]);
   const [loadingPatients, setLoadingPatients] = useState(true);
@@ -274,11 +268,12 @@ export default function TodaysPatient() {
   // step first), matching against patient name, patient ID, or phone number.
   const [toolbarQuery, setToolbarQuery] = useState('');
   // "No results" popup (Figma node 469:6139) — opens automatically a beat
-  // after the toolbar search settles on zero matches, so it doesn't flash
-  // open on every single keystroke while the user is still typing. Its
-  // "found" counterpart (same Figma node, opposite case) opens instead when
-  // the query matches someone in the broader registered-patients master
-  // list even though they aren't on today's/tomorrow's schedule.
+  // after the toolbar search settles, so it doesn't flash open on every
+  // single keystroke while the user is still typing. Its "found"
+  // counterpart (same Figma node, opposite case) opens instead when the
+  // query matches someone in the real `patients` table in Supabase — see
+  // the search effect further down, which queries the database directly
+  // and is intentionally independent of today's/tomorrow's table.
   const [notFoundOpen, setNotFoundOpen] = useState(false);
   const [foundOpen, setFoundOpen] = useState(false);
   const [foundPatient, setFoundPatient] = useState(null);
@@ -301,146 +296,79 @@ export default function TodaysPatient() {
     }));
   }
 
-  // Every patient registered at runtime (via "New Registration", with or
-  // without an appointment attached), kept as its own small directory so
-  // the "+ Appointment" dialog can find them again later — booking a
-  // second/future appointment for someone shouldn't require re-running
-  // registration just because they aren't in the dialog's original seeded
-  // roster. Keyed by id to avoid double-adding the same patient twice.
-  const [registeredPatients, setRegisteredPatients] = useState([]);
-
   // Loads today's/tomorrow's rosters from Supabase — appointments joined
   // with their patient — replacing the old MOCK_PATIENTS /
-  // MOCK_PATIENTS_TOMORROW arrays. This is the "pilot migration" for
-  // Today's Patient: reads now come from the real database (see
-  // supabase-seed-todays-patient.sql for the one-time seed that mirrors
-  // the original mock roster into real rows). Writes made *during* a
-  // session — New Registration, "+ Appointment" — are NOT persisted back
-  // to Supabase yet; they still only update local state via
-  // addPatientRow below, same as before this migration. That write-path
-  // (and wiring Registration.jsx itself to Supabase) is a follow-up step,
-  // since it also needs to resolve "is this a brand-new patient or an
-  // existing one" against real patient ids rather than the mock rosters
-  // used today.
-  useEffect(() => {
-    let cancelled = false;
+  // MOCK_PATIENTS_TOMORROW arrays. Pulled out as its own callback (not just
+  // inline in a mount effect) because two write flows need to trigger a
+  // fresh read afterwards: the standalone "+ Appointment" dialog calls this
+  // directly once it finishes inserting into Supabase (see onBooked below),
+  // and New Registration writes to Supabase then navigates back to this
+  // page — which remounts it (each route is a distinct element under
+  // AnimatePresence/Routes) and runs this same effect fresh on mount. So
+  // neither write path needs to reconstruct a row locally anymore; both
+  // just make sure the real data gets re-read.
+  const loadAppointments = useCallback(async () => {
+    setLoadingPatients(true);
+    setLoadError(null);
+    const { data, error } = await supabase
+      .from('appointments')
+      .select(
+        'id, appt_date, appt_time, dokter, room, keluhan, durasi, status, lab, remark, patients(mrn, name, category, phone)'
+      )
+      .order('appt_time', { ascending: true });
 
-    async function loadAppointments() {
-      setLoadingPatients(true);
-      setLoadError(null);
-      const { data, error } = await supabase
-        .from('appointments')
-        .select(
-          'id, appt_date, appt_time, dokter, room, keluhan, durasi, status, lab, remark, patients(name, category, phone)'
-        )
-        .order('appt_time', { ascending: true });
-
-      if (cancelled) return;
-
-      if (error) {
-        console.error('Failed to load appointments from Supabase', error);
-        setLoadError(error.message);
-        setLoadingPatients(false);
-        toast.error('Gagal memuat data pasien dari database.');
-        return;
-      }
-
-      const todayStr = new Date().toISOString().slice(0, 10);
-      const tomorrowStr = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-      const nextToday = [];
-      const nextTomorrow = [];
-      const nextThreads = {};
-
-      for (const row of data ?? []) {
-        // mr (the MR column's badge variant) is purely decorative and
-        // isn't part of the schema — every real row defaults to the most
-        // common variant (2) rather than encoding it in the database.
-        const mapped = {
-          id: row.id,
-          mr: 2,
-          appt: row.appt_time,
-          name: row.patients?.name ?? '(Tidak diketahui)',
-          category: row.patients?.category ?? 'Regular',
-          dokter: row.dokter,
-          room: row.room,
-          keluhan: row.keluhan,
-          durasi: row.durasi,
-          status: row.status,
-          lab: row.lab,
-          remark: row.remark,
-          phone: row.patients?.phone ?? '',
-        };
-        nextThreads[row.id] =
-          row.remark && row.remark !== '-'
-            ? [{ id: `${row.id}-seed`, sender: 'Receptionist', text: row.remark, time: row.appt_time }]
-            : [];
-
-        if (row.appt_date === todayStr) nextToday.push(mapped);
-        else if (row.appt_date === tomorrowStr) nextTomorrow.push(mapped);
-      }
-
-      setTodayPatients(nextToday);
-      setTomorrowPatients(nextTomorrow);
-      setRemarkThreads((prev) => ({ ...nextThreads, ...prev }));
+    if (error) {
+      console.error('Failed to load appointments from Supabase', error);
+      setLoadError(error.message);
       setLoadingPatients(false);
+      toast.error('Gagal memuat data pasien dari database.');
+      return;
     }
 
-    loadAppointments();
-    return () => {
-      cancelled = true;
-    };
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const tomorrowStr = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const nextToday = [];
+    const nextTomorrow = [];
+    const nextThreads = {};
+
+    for (const row of data ?? []) {
+      // mr (the MR column's badge variant) is purely decorative and
+      // isn't part of the schema — every real row defaults to the most
+      // common variant (2) rather than encoding it in the database.
+      const mapped = {
+        id: row.id,
+        mr: 2,
+        appt: row.appt_time,
+        name: row.patients?.name ?? '(Tidak diketahui)',
+        category: row.patients?.category ?? 'Regular',
+        dokter: row.dokter,
+        room: row.room,
+        keluhan: row.keluhan,
+        durasi: row.durasi,
+        status: row.status,
+        lab: row.lab,
+        remark: row.remark,
+        phone: row.patients?.phone ?? '',
+        mrn: row.patients?.mrn ?? null,
+      };
+      nextThreads[row.id] =
+        row.remark && row.remark !== '-'
+          ? [{ id: `${row.id}-seed`, sender: 'Receptionist', text: row.remark, time: row.appt_time }]
+          : [];
+
+      if (row.appt_date === todayStr) nextToday.push(mapped);
+      else if (row.appt_date === tomorrowStr) nextTomorrow.push(mapped);
+    }
+
+    setTodayPatients(nextToday);
+    setTomorrowPatients(nextTomorrow);
+    setRemarkThreads((prev) => ({ ...nextThreads, ...prev }));
+    setLoadingPatients(false);
   }, []);
 
-  // Adds a freshly registered/booked patient straight into the table —
-  // used by both the "New Registration" flow (arrives via router state
-  // after navigating back from /registration) and the standalone "+
-  // Appointment" dialog (same page, called directly). `bucket` decides
-  // whether it lands under Today or Tomorrow, matching whichever tab the
-  // appointment's own date actually falls on. NOTE: this only updates
-  // local state — see the fetch effect above for why the write side isn't
-  // wired to Supabase yet, so a page refresh currently loses rows added
-  // this way (same limitation the mock-data version already had).
-  function addPatientRow(row, bucket) {
-    const withId = { ...row, id: row.id ?? nextRuntimePatientId++ };
-    if (bucket === 'tomorrow') {
-      setTomorrowPatients((prev) => [withId, ...prev]);
-    } else {
-      setTodayPatients((prev) => [withId, ...prev]);
-    }
-    setRemarkThreads((prev) => ({ ...prev, [withId.id]: [] }));
-    return withId;
-  }
-
-  // Registration navigates back here with the newly created row in router
-  // state (it's a full page, not a modal, so it can't just call a prop).
-  // Consumed once on arrival, then cleared from history state so refreshing
-  // or navigating back to this page doesn't re-add the same row again.
-  // Waits for the initial Supabase fetch to land first (`loadingPatients`)
-  // so this local addition doesn't get wiped out by that fetch's
-  // setTodayPatients/setTomorrowPatients landing afterwards.
   useEffect(() => {
-    const incoming = location.state?.newPatient;
-    if (!incoming) return;
-    if (loadingPatients) return;
-    const added = addPatientRow(incoming, location.state?.bucket ?? 'today');
-    setRegisteredPatients((prev) =>
-      prev.some((p) => p.id === added.id)
-        ? prev
-        : [
-            ...prev,
-            {
-              id: added.id,
-              name: added.name,
-              mrn: `P-${String(added.id).padStart(4, '0')}`,
-              phone: added.phone,
-              category: added.category || 'Regular',
-            },
-          ]
-    );
-    toast.success(`${incoming.name} ditambahkan ke ${location.state?.bucket === 'tomorrow' ? "Tomorrow's" : "Today's"} Patient`);
-    navigate(location.pathname, { replace: true, state: {} });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.state, loadingPatients]);
+    loadAppointments();
+  }, [loadAppointments]);
 
   // Status is editable by both Doctor and Receptionist now, but each only
   // owns half of it: Doctor moves the clinical side forward (In Treatment /
@@ -555,40 +483,15 @@ export default function TodaysPatient() {
     );
   }, [daySource, nameQuery, apptSortAsc]);
 
-  // The broader patient database — runtime registrations merged with the
-  // seeded mock roster from the Appointment dialog — is what the toolbar
-  // search (Cari Pasien / ID Patient / Nomor Telp) looks up against. It's
+  // The toolbar search (Cari Pasien / ID Patient / Nomor Telp) looks
+  // patients up directly in the real `patients` table in Supabase — it's
   // intentionally independent of daySource/visiblePatients: the table
   // already has its own search (Patient Name column) for "who's on
   // today's/tomorrow's schedule". The toolbar's only job is "is this person
   // in our patient database at all" — always answered with one of the two
   // popups below, regardless of whether they also happen to be on today's
-  // or tomorrow's list already.
-  const registeredMasterList = useMemo(
-    () => [...registeredPatients, ...REGISTERED_PATIENTS],
-    [registeredPatients]
-  );
-
-  function matchesRegisteredQuery(patient, trimmedLowerQuery) {
-    return (
-      patient.name.toLowerCase().includes(trimmedLowerQuery) ||
-      patient.mrn?.toLowerCase().includes(trimmedLowerQuery) ||
-      patient.phone?.toLowerCase().replace(/-/g, '').includes(trimmedLowerQuery.replace(/-/g, ''))
-    );
-  }
-
-  const matchedRegisteredPatient = useMemo(() => {
-    const trimmed = toolbarQuery.trim().toLowerCase();
-    if (!trimmed) return null;
-    return registeredMasterList.find((p) => matchesRegisteredQuery(p, trimmed)) ?? null;
-  }, [toolbarQuery, registeredMasterList]);
-
-  // Debounce opening either popup so it doesn't flash open after every
-  // single keystroke while the user is still mid-typing. Matched against
-  // the patient database → "already registered" popup; no match anywhere
-  // in the database → "not yet registered" popup. Fires purely off
-  // toolbarQuery/the patient database now — the current day's table
-  // (daySource/visiblePatients) is never consulted here.
+  // or tomorrow's list already. Debounced so it doesn't fire a request on
+  // every keystroke while the user is still typing.
   useEffect(() => {
     const trimmed = toolbarQuery.trim();
     if (!trimmed) {
@@ -597,9 +500,25 @@ export default function TodaysPatient() {
       setFoundPatient(null);
       return;
     }
-    const timer = setTimeout(() => {
-      if (matchedRegisteredPatient) {
-        setFoundPatient(matchedRegisteredPatient);
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      const esc = escapeIlike(trimmed);
+      const { data, error } = await supabase
+        .from('patients')
+        .select('id, mrn, name, phone, category')
+        .or(`name.ilike.%${esc}%,mrn.ilike.%${esc}%,phone.ilike.%${esc}%`)
+        .limit(1);
+
+      if (cancelled) return;
+
+      if (error) {
+        console.error('Failed to search patient database', error);
+        return;
+      }
+
+      const match = data?.[0] ?? null;
+      if (match) {
+        setFoundPatient(match);
         setFoundOpen(true);
         setNotFoundOpen(false);
       } else {
@@ -607,8 +526,11 @@ export default function TodaysPatient() {
         setFoundOpen(false);
       }
     }, 500);
-    return () => clearTimeout(timer);
-  }, [toolbarQuery, matchedRegisteredPatient]);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [toolbarQuery]);
 
   return (
     <AnimatePresence mode="wait" initial={false}>
@@ -973,8 +895,7 @@ export default function TodaysPatient() {
               setAppointmentDialogOpen(next);
               if (!next) setAppointmentPreselect(null);
             }}
-            onBooked={addPatientRow}
-            extraPatients={registeredPatients}
+            onBooked={loadAppointments}
             preselectedPatient={appointmentPreselect}
           />
           <SettingRoomLabDialog
