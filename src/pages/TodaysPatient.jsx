@@ -277,6 +277,17 @@ export default function TodaysPatient() {
   const [notFoundOpen, setNotFoundOpen] = useState(false);
   const [foundOpen, setFoundOpen] = useState(false);
   const [foundPatient, setFoundPatient] = useState(null);
+  // Autocomplete dropdown for the toolbar search — a lighter-weight, as-you-
+  // type list of up to 6 matching patients (same name/mrn/phone match as the
+  // found/not-found popups below, just not limited to a single row), so the
+  // user can pick someone without waiting for the full debounce-triggered
+  // modal or typing the whole name. `suggestionsOpen` is tracked separately
+  // from "do we have suggestions" so a click/Escape/blur can hide the list
+  // without throwing away the fetched data (e.g. re-focusing the field
+  // re-opens it instantly using what's already there).
+  const [suggestions, setSuggestions] = useState([]);
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const [apptSortAsc, setApptSortAsc] = useState(true);
   // Remark is a two-way chat thread (Receptionist <-> Doctor) per patient
   // now, not a single free-text field — seeded from each appointment's
@@ -498,16 +509,23 @@ export default function TodaysPatient() {
       setNotFoundOpen(false);
       setFoundOpen(false);
       setFoundPatient(null);
+      setSuggestions([]);
+      setSuggestionsOpen(false);
+      setHighlightedIndex(-1);
       return;
     }
     let cancelled = false;
     const timer = setTimeout(async () => {
       const esc = escapeIlike(trimmed);
+      // limit(6) instead of limit(1): the first row still drives the
+      // existing found/not-found popup below exactly as before, but the
+      // extra rows feed the autocomplete dropdown so the user can see (and
+      // pick) other close matches instead of only the single best one.
       const { data, error } = await supabase
         .from('patients')
         .select('id, mrn, name, phone, category')
         .or(`name.ilike.%${esc}%,mrn.ilike.%${esc}%,phone.ilike.%${esc}%`)
-        .limit(1);
+        .limit(6);
 
       if (cancelled) return;
 
@@ -516,7 +534,11 @@ export default function TodaysPatient() {
         return;
       }
 
-      const match = data?.[0] ?? null;
+      const results = data ?? [];
+      setSuggestions(results);
+      setHighlightedIndex(-1);
+
+      const match = results[0] ?? null;
       if (match) {
         setFoundPatient(match);
         setFoundOpen(true);
@@ -531,6 +553,37 @@ export default function TodaysPatient() {
       clearTimeout(timer);
     };
   }, [toolbarQuery]);
+
+  // Picking a suggestion from the autocomplete dropdown jumps straight to
+  // the "found" popup for that exact patient (no need to wait for the
+  // debounce to settle again), fills the field with their full name so it
+  // stays a sensible value if the user keeps editing, and closes the list.
+  function handleSelectSuggestion(patient) {
+    setToolbarQuery(patient.name);
+    setFoundPatient(patient);
+    setFoundOpen(true);
+    setNotFoundOpen(false);
+    setSuggestionsOpen(false);
+    setHighlightedIndex(-1);
+  }
+
+  function handleToolbarKeyDown(e) {
+    if (!suggestionsOpen || suggestions.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightedIndex((i) => (i + 1) % suggestions.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightedIndex((i) => (i - 1 + suggestions.length) % suggestions.length);
+    } else if (e.key === 'Enter') {
+      if (highlightedIndex >= 0) {
+        e.preventDefault();
+        handleSelectSuggestion(suggestions[highlightedIndex]);
+      }
+    } else if (e.key === 'Escape') {
+      setSuggestionsOpen(false);
+    }
+  }
 
   return (
     <AnimatePresence mode="wait" initial={false}>
@@ -624,20 +677,77 @@ export default function TodaysPatient() {
                   <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
                   <Input
                     value={toolbarQuery}
-                    onChange={(e) => setToolbarQuery(e.target.value)}
+                    onChange={(e) => {
+                      setToolbarQuery(e.target.value);
+                      setSuggestionsOpen(true);
+                      setHighlightedIndex(-1);
+                    }}
+                    onFocus={() => {
+                      if (suggestions.length > 0) setSuggestionsOpen(true);
+                    }}
+                    onBlur={() => {
+                      // Delayed so a click on a suggestion (which blurs the
+                      // input first) still registers before the list unmounts.
+                      window.setTimeout(() => setSuggestionsOpen(false), 120);
+                    }}
+                    onKeyDown={handleToolbarKeyDown}
                     placeholder="Cari Pasien / ID Patient / Nomor Telp"
                     aria-label="Cari pasien berdasarkan nama, ID pasien, atau nomor telepon"
+                    role="combobox"
+                    aria-expanded={suggestionsOpen && suggestions.length > 0}
+                    aria-autocomplete="list"
+                    autoComplete="off"
                     className="h-9 rounded-3xl border border-solid border-[#e2e8f0] bg-white pl-9 pr-8 text-sm shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)]"
                   />
                   {toolbarQuery && (
                     <button
                       type="button"
                       aria-label="Clear search"
-                      onClick={() => setToolbarQuery('')}
+                      onClick={() => {
+                        setToolbarQuery('');
+                        setSuggestions([]);
+                        setSuggestionsOpen(false);
+                      }}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                     >
                       <X className="size-4" />
                     </button>
+                  )}
+
+                  {/* Autocomplete dropdown — up to 6 patients matching the
+                      same name/mrn/phone search as the found/not-found
+                      popups, so the user can jump straight to one instead of
+                      typing the full name and waiting for the debounce. */}
+                  {suggestionsOpen && suggestions.length > 0 && (
+                    <div
+                      role="listbox"
+                      aria-label="Patient suggestions"
+                      className="absolute left-0 top-full z-50 mt-2 w-full overflow-hidden rounded-2xl border border-[#e2e8f0] bg-white py-1 shadow-[0px_8px_24px_0px_rgba(0,0,0,0.12)]"
+                    >
+                      {suggestions.map((patient, index) => (
+                        <button
+                          key={patient.id}
+                          type="button"
+                          role="option"
+                          aria-selected={highlightedIndex === index}
+                          onMouseDown={(e) => e.preventDefault()}
+                          onMouseEnter={() => setHighlightedIndex(index)}
+                          onClick={() => handleSelectSuggestion(patient)}
+                          className={cn(
+                            'flex w-full flex-col items-start gap-0.5 px-3.5 py-2 text-left',
+                            highlightedIndex === index ? 'bg-[#f0fdf4] text-[#15803d]' : 'hover:bg-slate-50'
+                          )}
+                        >
+                          <span className="truncate text-sm font-medium text-[#020617]">
+                            {patient.name}
+                          </span>
+                          <span className="truncate text-xs text-slate-400">
+                            {patient.mrn}
+                            {patient.phone ? ` · ${patient.phone}` : ''}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
                   )}
                 </div>
 
