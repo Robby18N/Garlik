@@ -524,9 +524,10 @@ export default function TodaysPatient() {
   }
 
   // "Setting Room & Lab" popup (Figma node 556:859), opened from the
-  // toolbar's "Rooms & Labs" button. `roomLabSettings` is null until the
-  // user actually clicks Save at least once — Tomorrow's Room/Lab columns
-  // stay "-" until then, and auto-fill per-doctor once it's set.
+  // toolbar's "Rooms & Labs" button. `roomLabSettings` only remembers the
+  // last thing saved *this session*, purely to pre-fill the dialog if it's
+  // reopened without a reload — it's no longer where the actual Room/Lab
+  // values come from (see handleSaveRoomLabSettings below).
   const [roomLabSettingOpen, setRoomLabSettingOpen] = useState(false);
   const [roomLabSettings, setRoomLabSettings] = useState(null);
 
@@ -558,24 +559,47 @@ export default function TodaysPatient() {
     setEditDialogOpen(true);
   }
 
-  function handleSaveRoomLabSettings(nextSettings) {
+  // Applies each doctor's Room + Lab assignment straight to the real
+  // appointment rows in Supabase — every one of that doctor's appointments
+  // for TODAY and TOMORROW both get the same Room and Lab value, the same
+  // way a front-desk "who's in which room today" assignment would actually
+  // work. This used to only touch an in-memory override that (a) only ever
+  // affected the Tomorrow view's display and (b) never survived a reload —
+  // Today's table was completely unaffected no matter what was Saved here.
+  // Per-patient Room/Lab can still be corrected individually afterwards via
+  // each row's pencil (Edit) button; this dialog is for the common case of
+  // setting a doctor's room for the whole day in one go.
+  async function handleSaveRoomLabSettings(nextSettings) {
     setRoomLabSettings(nextSettings);
-    toast.success('Room & Lab settings saved');
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const tomorrowStr = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+    const results = await Promise.all(
+      Object.entries(nextSettings).map(([doctor, { room, lab }]) =>
+        supabase
+          .from('appointments')
+          .update({ room, lab: lab ? 'OK' : 'NOK' })
+          .eq('dokter', doctor)
+          .in('appt_date', [todayStr, tomorrowStr])
+      )
+    );
+
+    const failed = results.filter((r) => r.error);
+    if (failed.length > 0) {
+      failed.forEach((r) => console.error('Failed to apply Room & Lab setting', r.error));
+      toast.error('Sebagian setting Room & Lab gagal disimpan ke database — coba lagi.');
+    } else {
+      toast.success('Room & Lab settings saved — Today & Tomorrow diperbarui');
+    }
+    loadAppointments();
   }
 
-  // Tomorrow's Room/Lab aren't fixed yet (no appointment has happened), so
-  // they auto-fill from whichever doctor is booked, per the Rooms & Labs
-  // setting — until Save has been clicked at least once, both stay "-".
-  // Today's schedule is unaffected and always shows its own fixed values.
+  // Room/Lab now always come straight from the appointment's own row
+  // (kept persisted by handleSaveRoomLabSettings and by the per-patient
+  // Edit dialog) — no more ephemeral Tomorrow-only override.
   function getRoomLabDisplay(patient) {
-    if (dayFilter !== 'Tomorrow') {
-      return { room: patient.room, lab: patient.lab };
-    }
-    const doctorSetting = roomLabSettings?.[patient.dokter];
-    return {
-      room: doctorSetting?.room ?? '-',
-      lab: doctorSetting ? (doctorSetting.lab ? 'OK' : 'NOK') : '-',
-    };
+    return { room: patient.room, lab: patient.lab };
   }
 
   function handleViewPatient(patient) {

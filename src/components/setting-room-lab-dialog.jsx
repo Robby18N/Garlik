@@ -20,9 +20,10 @@ const DEFAULT_SETTINGS = {
 /**
  * "Setting Room & Lab" popup (Figma node 556:859) opened from the Today's
  * Patient toolbar's "Rooms & Labs" button. Lets front-desk staff assign a
- * Room and toggle Lab availability per doctor; Save persists the mapping,
- * which the Today's Patient table then uses to auto-fill Tomorrow's Room
- * and Lab columns for every patient booked with that doctor.
+ * Room and toggle Lab availability per doctor; Save writes that Room/Lab
+ * straight into every one of that doctor's appointments in Supabase, for
+ * both Today and Tomorrow's patient list — see
+ * TodaysPatient's handleSaveRoomLabSettings.
  */
 export default function SettingRoomLabDialog({ open, onOpenChange, settings, onSave }) {
   const [draft, setDraft] = useState(settings ?? DEFAULT_SETTINGS);
