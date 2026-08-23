@@ -99,10 +99,15 @@ const STATUS_STYLES = {
 // container — no column (in particular Action, at the far right) ever
 // gets cut off regardless of viewport width.
 //
-// A Room-narrower/Status-wider rebalance was tried and reverted — it read
-// as more lopsided, not tidier. The per-cell padding bump below (see the
-// Status and Lab TableCells further down) is what actually fixed the
-// crowding, without touching these proportions.
+// A Room-narrower/Status-wider percentage rebalance was tried and
+// reverted — it read as more lopsided, not tidier. Status is instead
+// pinned to a fixed 140px (rather than a % share) — wide enough to fit
+// its widest realistic content ("~135 menit lagi" plus the dropdown
+// chevron) with room to spare, and unlike a percentage it won't shrink
+// back down on a narrower viewport the way the other columns can. The
+// per-cell padding on the Status/Lab TableCells further down is what
+// governs the gap *after* the pill; this width is what stops the pill
+// itself from crowding that padding out in the first place.
 const COL_WIDTH = {
   no: 'w-[3.25%]',
   mr: 'w-[3.55%]',
@@ -112,7 +117,7 @@ const COL_WIDTH = {
   room: 'w-[6.04%]',
   keluhan: 'w-[12.08%]',
   durasi: 'w-[6.04%]',
-  status: 'w-[10.42%]',
+  status: 'w-[140px]',
   lab: 'w-[3.77%]',
   remark: 'w-[22.64%]',
   action: 'w-[6.57%]',
