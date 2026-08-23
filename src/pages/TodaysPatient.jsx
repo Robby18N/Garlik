@@ -62,6 +62,7 @@ import { usePatientStatus } from '@/context/patient-status-context';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { escapeIlike } from '@/lib/patients';
+import { computeWaitEstimates, isWaitingStatus } from '@/lib/wait-estimate';
 
 const STATUS_STYLES = {
   Complete: 'border-transparent bg-[rgba(34,197,94,0.08)] text-[#16a34a]',
@@ -322,6 +323,13 @@ export default function TodaysPatient() {
     }));
   }
 
+  // REQUIRES a one-time migration before this file is deployed — run once
+  // in the Supabase SQL Editor:
+  //   alter table appointments add column if not exists started_at timestamptz;
+  // Without it, the `.select(...)` below (which now includes started_at)
+  // fails outright and this whole page stops loading — see the live
+  // wait-time estimate (lib/wait-estimate.js) that depends on this column.
+  //
   // Loads today's/tomorrow's rosters from Supabase — appointments joined
   // with their patient — replacing the old MOCK_PATIENTS /
   // MOCK_PATIENTS_TOMORROW arrays. Pulled out as its own callback (not just
@@ -338,8 +346,15 @@ export default function TodaysPatient() {
     setLoadError(null);
     const { data, error } = await supabase
       .from('appointments')
+      // started_at: stamped by persistStatus/EditAppointmentDialog the
+      // moment a patient's status becomes "In Treatment" — feeds the live
+      // wait-time estimate below (lib/wait-estimate.js). Requires the
+      // `started_at timestamptz` column to already exist on `appointments`
+      // in Supabase (see the migration note above loadAppointments' call
+      // sites) — selecting a column that doesn't exist yet fails the whole
+      // query, so that migration must run before this code is deployed.
       .select(
-        'id, appt_date, appt_time, dokter, room, keluhan, durasi, status, lab, remark, patients(mrn, name, category, phone)'
+        'id, appt_date, appt_time, dokter, room, keluhan, durasi, status, lab, remark, started_at, patients(mrn, name, category, phone)'
       )
       .order('appt_time', { ascending: true });
 
@@ -400,6 +415,7 @@ export default function TodaysPatient() {
         remark: row.remark,
         phone: row.patients?.phone ?? '',
         mrn: row.patients?.mrn ?? null,
+        startedAt: row.started_at,
       };
       nextThreads[row.id] =
         row.remark && row.remark !== '-'
@@ -456,8 +472,39 @@ export default function TodaysPatient() {
   // back to Available deliberately rather than silently.
   const [cleaningDialog, setCleaningDialog] = useState(null);
 
-  function applyStatusChange(patient, nextStatus) {
+  // Persists a status change to the appointment's row in Supabase — this
+  // used to only update the ephemeral statusOverrides context (see
+  // usePatientStatus), which meant every inline Status change here was
+  // lost on reload and invisible to anyone else's session. Needed for real
+  // now, not just as a nice-to-have: the live wait-time estimate (below)
+  // depends on `started_at` actually being recorded in the database the
+  // moment a doctor starts a treatment — an in-memory-only timestamp would
+  // vanish the instant the page refreshed, breaking the estimate for
+  // everyone else looking at the same roster.
+  //
+  // `setStatus` (the ephemeral override) still runs first for instant
+  // visual feedback while the network request is in flight; loadAppointments
+  // afterwards reconciles everything (this patient's real status/started_at,
+  // and any other patient's, e.g. if two people are editing at once) from
+  // the database, which is what the wait-time estimate actually reads.
+  async function persistStatus(patient, nextStatus) {
+    const prevStatus = statusOverrides[patient.id] ?? patient.status;
     setStatus(patient.id, nextStatus);
+    const patch = { status: nextStatus };
+    if (nextStatus === 'In Treatment' && prevStatus !== 'In Treatment') {
+      patch.started_at = new Date().toISOString();
+    }
+    const { error } = await supabase.from('appointments').update(patch).eq('id', patient.id);
+    if (error) {
+      console.error('Failed to save status change', error);
+      toast.error('Status tersimpan sementara di layar ini, tapi gagal disimpan ke database.');
+      return;
+    }
+    loadAppointments();
+  }
+
+  function applyStatusChange(patient, nextStatus) {
+    persistStatus(patient, nextStatus);
     toast.success(`Status ${patient.name} diperbarui ke "${nextStatus}"`);
   }
 
@@ -472,7 +519,7 @@ export default function TodaysPatient() {
   function handleConfirmRoomReady() {
     if (!cleaningDialog) return;
     const { patient } = cleaningDialog;
-    setStatus(patient.id, 'Complete');
+    persistStatus(patient, 'Complete');
     toast.success(`${patient.name} selesai ditangani — Ruangan ${patient.room} siap digunakan`);
     setCleaningDialog(null);
   }
@@ -545,6 +592,31 @@ export default function TodaysPatient() {
     const base = dayFilter === 'Tomorrow' ? tomorrowPatients : todayPatients;
     return isDoctor ? base.filter((p) => p.dokter === doctorName) : base;
   }, [dayFilter, isDoctor, doctorName, todayPatients, tomorrowPatients]);
+
+  // Live wait-time estimate (see lib/wait-estimate.js) for every waiting
+  // patient, keyed by their appointment id. Only meaningful for "Today" —
+  // "Tomorrow" hasn't started yet, so there's no doctor currently "In
+  // Treatment" to estimate around, and showing a number there would read
+  // as a real-time queue position that doesn't exist yet.
+  //
+  // `nowTick` exists purely to force this to recompute periodically — the
+  // underlying data (daySource, statusOverrides) doesn't need to change
+  // for the *displayed* minutes to drift, since they're derived from
+  // elapsed wall-clock time.
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    const interval = setInterval(() => setNowTick(Date.now()), 60_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const estimateRoster = useMemo(
+    () => daySource.map((p) => ({ ...p, status: statusOverrides[p.id] ?? p.status })),
+    [daySource, statusOverrides]
+  );
+  const waitEstimates = useMemo(
+    () => (dayFilter === 'Today' ? computeWaitEstimates(estimateRoster, nowTick) : new Map()),
+    [estimateRoster, nowTick, dayFilter]
+  );
 
   // Only the Patient Name column's own search (the magnifying-glass popover
   // in the table header) filters this table — it's the tool for finding
@@ -731,14 +803,20 @@ export default function TodaysPatient() {
         {/* Page body */}
         <main className="flex min-w-0 flex-1 flex-col gap-4 p-6">
           <SummaryCards
-            patients={
-              isDoctor
-                ? todayPatients.filter((p) => p.dokter === doctorName).map((p) => ({
-                    ...p,
-                    status: statusOverrides[p.id] ?? p.status,
-                  }))
-                : undefined
-            }
+            // Always today's real roster (Supabase-backed), not the fixed
+            // mock this used to fall back to for Receptionist/Admin — that
+            // mock was a leftover from before the Supabase migration and
+            // never got reconnected, which is why the "Waiting list"/
+            // "Status Patient" cards used to show numbers unrelated to the
+            // table underneath them. Doctor still only sees their own
+            // patients; Receptionist/Admin see everyone today.
+            patients={(isDoctor
+              ? todayPatients.filter((p) => p.dokter === doctorName)
+              : todayPatients
+            ).map((p) => ({
+              ...p,
+              status: statusOverrides[p.id] ?? p.status,
+            }))}
             doctorScoped={isDoctor}
           />
 
@@ -1004,6 +1082,17 @@ export default function TodaysPatient() {
                               </Badge>
                             );
                           }
+                          // While a patient is still waiting to be seen, the
+                          // pill shows the live estimated wait (see
+                          // lib/wait-estimate.js) instead of the raw status
+                          // label — the underlying `value`/options are
+                          // untouched, this only overrides what the trigger
+                          // displays. `title` keeps the real status name
+                          // available on hover so it's never actually
+                          // hidden, just not the headline text.
+                          const estimate = isWaitingStatus(currentStatus)
+                            ? waitEstimates.get(patient.id)
+                            : null;
                           return (
                             <Select
                               value={currentStatus}
@@ -1012,12 +1101,13 @@ export default function TodaysPatient() {
                               <SelectTrigger
                                 size="sm"
                                 aria-label={`Change status for ${patient.name}`}
+                                title={estimate ? currentStatus : undefined}
                                 className={cn(
                                   'w-fit gap-1 rounded-full border-none px-2.5 py-1 text-xs font-semibold shadow-none',
                                   STATUS_STYLES[currentStatus]
                                 )}
                               >
-                                <SelectValue />
+                                <SelectValue>{estimate?.label ?? currentStatus}</SelectValue>
                               </SelectTrigger>
                               <SelectContent>
                                 {STATUS_OPTIONS.map((option) => (

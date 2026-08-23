@@ -18,64 +18,23 @@ import {
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import { StatCard, DetailHighlightToggle } from '@/components/stat-card';
+import { isWaitingStatus } from '@/lib/wait-estimate';
 
 // Mock data matching the Figma "Summary show & hide" component exactly
 // (Show state: node 583:4311, Hide state: node 583:4583).
 const DEFAULT_STICKY_NOTES = ['Lantai Licin', 'Ada Lalat', 'Toilet'];
 
-// Per-doctor waiting list, with the patients behind each count so the
-// waiting-list row can open a detail popup.
-const WAITING_BY_DOCTOR = [
-  {
-    doctor: 'drg. SM',
-    patients: [
-      { name: 'Agung Wijaya Kusuma', wait: '12 menit' },
-      { name: 'Rina Marlina', wait: '18 menit' },
-      { name: 'Budi Santoso', wait: '25 menit' },
-      { name: 'Dimas Saputra', wait: '9 menit' },
-      { name: 'Yoga Pratama', wait: '15 menit' },
-      { name: 'Nadia Putri', wait: '20 menit' },
-      { name: 'Reza Kurniawan', wait: '30 menit' },
-    ],
-  },
-  {
-    doctor: 'drg. DS',
-    patients: [
-      { name: 'Herman Wijaya', wait: '10 menit' },
-      { name: 'Sari Dewi', wait: '22 menit' },
-      { name: 'Bagus Prasetyo', wait: '14 menit' },
-    ],
-  },
-  {
-    doctor: 'drg. AN',
-    patients: [
-      { name: 'Siti Rahmawati', wait: '8 menit' },
-      { name: 'Andi Pratama', wait: '16 menit' },
-      { name: 'Wahyu Nugroho', wait: '21 menit' },
-    ],
-  },
-];
-
-const STATUS_BREAKDOWN = [
-  { label: 'Waiting', value: 19, dot: 'bg-orange-500' },
-  { label: 'Complete', value: 1, dot: 'bg-green-500' },
-  { label: 'Late', value: 2, dot: 'bg-purple-500' },
-  { label: 'Cancel', value: 2, dot: 'bg-red-500' },
-];
-
-// Same four buckets as STATUS_BREAKDOWN above, but computed live from a
-// real patient list (Today's Patient's status field) instead of a fixed
-// mock — used only for the doctor-scoped variant, where the numbers have
-// to actually reflect that doctor's own roster.
-// "WL" (Waiting List — TodaysPatient's neutral just-arrived status, before
-// any real wait time has been observed) counts as part of the same
-// "Waiting" family as "Waiting 10 Min"/"Waiting 20 Min" here — it just
-// isn't a `startsWith('Waiting')` match since the label itself is
-// deliberately shortened to line up with this section's own "Waiting list"
-// stat card. Keep this in sync with TodaysPatient's STATUS_STYLES.
-function isWaitingStatus(status) {
-  return typeof status === 'string' && (status === 'WL' || status.startsWith('Waiting'));
-}
+// The four Status Patient buckets, matched against a real patient list
+// (Today's Patient's status field) — used for both the doctor-scoped
+// variant (that doctor's own roster) and the Receptionist/Admin variant
+// (the full today's roster). This used to be a fixed mock (STATUS_BREAKDOWN,
+// 19/1/2/2) shown only for Receptionist/Admin — a leftover from before the
+// Supabase migration that never got wired up, so it silently never matched
+// what the table below it actually showed.
+//
+// isWaitingStatus lives in lib/wait-estimate.js (shared with TodaysPatient's
+// live wait-time estimate) so "WL" counting as part of the "Waiting" family
+// can't drift between the two places that need to agree on it.
 
 const STATUS_BUCKETS = [
   { label: 'Waiting', dot: 'bg-orange-500', match: isWaitingStatus },
@@ -101,13 +60,17 @@ const STATUS_BUCKETS = [
  * local state). Waiting list's per-doctor row opens a popup with the
  * actual patients (name + wait time) behind that doctor's count.
  *
- * `patients` + `doctorScoped` are optional — when the Doctor role passes
- * its own (already dokter-filtered) roster in, the Waiting list and
- * Status Patient cards switch from the all-doctors mock breakdown to
- * live numbers computed from that roster, so a doctor never sees another
- * doctor's patients in their own summary. Leaving both props out (the
- * Receptionist/Admin default) keeps the original mock-driven cards
- * unchanged.
+ * `patients` is Today's Patient's real roster (Supabase-backed, not mock) —
+ * for a Doctor it's already filtered to just their own patients, for
+ * Receptionist/Admin it's everyone today. `doctorScoped` says which shape
+ * it's in: `true` means "already one doctor, show a flat waiting list";
+ * `false` means "spans every doctor, group the waiting list by `dokter`"
+ * (see `waitingByDoctor` below). Either way, both the Waiting list and
+ * Status Patient cards are always computed live from `patients` now — this
+ * used to fall back to fixed mock numbers (WAITING_BY_DOCTOR, 7/3/3;
+ * STATUS_BREAKDOWN, 19/1/2/2) for Receptionist/Admin, left over from before
+ * the Supabase migration and never reconnected, which is why those two
+ * cards used to show numbers with no relationship to the table underneath.
  */
 export default function SummaryCards({ patients, doctorScoped = false }) {
   const [showDetail, setShowDetail] = useState(false);
@@ -130,28 +93,45 @@ export default function SummaryCards({ patients, doctorScoped = false }) {
     setNotes((prev) => prev.filter((_, i) => i !== index));
   }
 
-  const totalWaiting = WAITING_BY_DOCTOR.reduce((sum, d) => sum + d.patients.length, 0);
+  const roster = patients ?? [];
 
-  const doctorRoster = doctorScoped ? (patients ?? []) : [];
-
-  const doctorWaitingList = useMemo(
+  // Doctor-scoped: a flat list of just this doctor's own waiting patients
+  // (there's only one doctor to break down by, so grouping would be
+  // pointless). Used directly by the "Waiting list" card when doctorScoped.
+  const waitingList = useMemo(
     () =>
-      doctorRoster
+      roster
         .filter((p) => isWaitingStatus(p.status))
         // "WL" has no "Waiting " prefix to strip — replace() is a no-op for
         // it, so the pill just shows "WL" as-is, matching the Status badge.
         .map((p) => ({ name: p.name, wait: p.status.replace('Waiting ', '') })),
-    [doctorRoster]
+    [roster]
   );
 
-  const doctorStatusBreakdown = useMemo(
+  // Receptionist/Admin: the same waiting patients, grouped by `dokter` so
+  // the card can show one row per doctor (matching the old mock's shape)
+  // with a click-through to that doctor's own list.
+  const waitingByDoctor = useMemo(() => {
+    const groups = new Map();
+    for (const p of roster) {
+      if (!isWaitingStatus(p.status)) continue;
+      const doctor = p.dokter || 'Tidak diketahui';
+      if (!groups.has(doctor)) groups.set(doctor, []);
+      groups.get(doctor).push({ name: p.name, wait: p.status.replace('Waiting ', '') });
+    }
+    return Array.from(groups.entries()).map(([doctor, waiting]) => ({ doctor, patients: waiting }));
+  }, [roster]);
+
+  const totalWaiting = waitingList.length;
+
+  const statusBreakdown = useMemo(
     () =>
       STATUS_BUCKETS.map((bucket) => ({
         label: bucket.label,
         dot: bucket.dot,
-        value: doctorRoster.filter((p) => bucket.match(p.status)).length,
+        value: roster.filter((p) => bucket.match(p.status)).length,
       })),
-    [doctorRoster]
+    [roster]
   );
 
   return (
@@ -216,15 +196,15 @@ export default function SummaryCards({ patients, doctorScoped = false }) {
         <StatCard
           icon={<UsersRound className="size-4" />}
           title="Waiting list"
-          count={doctorScoped ? doctorWaitingList.length : totalWaiting}
+          count={totalWaiting}
           showDetail={showDetail}
         >
           <div className="flex flex-col gap-1.5 overflow-y-auto">
             {doctorScoped ? (
-              doctorWaitingList.length === 0 ? (
+              waitingList.length === 0 ? (
                 <p className="text-[13px] text-slate-400">Tidak ada pasien menunggu.</p>
               ) : (
-                doctorWaitingList.map((p, i) => (
+                waitingList.map((p, i) => (
                   <div
                     key={`${p.name}-${i}`}
                     className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-1.5 text-xs"
@@ -236,8 +216,10 @@ export default function SummaryCards({ patients, doctorScoped = false }) {
                   </div>
                 ))
               )
+            ) : waitingByDoctor.length === 0 ? (
+              <p className="text-[13px] text-slate-400">Tidak ada pasien menunggu.</p>
             ) : (
-              WAITING_BY_DOCTOR.map((item) => (
+              waitingByDoctor.map((item) => (
                 <button
                   key={item.doctor}
                   type="button"
@@ -254,16 +236,17 @@ export default function SummaryCards({ patients, doctorScoped = false }) {
           </div>
         </StatCard>
 
-        {/* Status patient breakdown — real counts from this doctor's own
-            roster when doctor-scoped, otherwise the clinic-wide mock. */}
+        {/* Status patient breakdown — real counts from today's roster
+            (this doctor's own patients when doctor-scoped, everyone
+            today for Receptionist/Admin). */}
         <StatCard
           icon={<Users className="size-4" />}
           title="Status Patient"
-          count={doctorScoped ? doctorRoster.length : 30}
+          count={roster.length}
           showDetail={showDetail}
         >
           <div className="grid flex-1 grid-cols-4 gap-2">
-            {(doctorScoped ? doctorStatusBreakdown : STATUS_BREAKDOWN).map((item) => (
+            {statusBreakdown.map((item) => (
               <div
                 key={item.label}
                 className="flex flex-col items-center justify-center gap-1.5 rounded-lg bg-slate-50/60 py-2"
@@ -296,7 +279,7 @@ export default function SummaryCards({ patients, doctorScoped = false }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {(WAITING_BY_DOCTOR.find((d) => d.doctor === activeDoctor)?.patients ?? []).map(
+              {(waitingByDoctor.find((d) => d.doctor === activeDoctor)?.patients ?? []).map(
                 (p) => (
                   <TableRow key={p.name}>
                     <TableCell className="text-[#020617]">{p.name}</TableCell>

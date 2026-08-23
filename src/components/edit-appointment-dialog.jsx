@@ -98,10 +98,18 @@ export default function EditAppointmentDialog({
     }
 
     setSaving(true);
-    const { error } = await supabase
-      .from('appointments')
-      .update({ dokter, room, keluhan: keluhan || '-', durasi, status, lab })
-      .eq('id', appointment.id);
+    const patch = { dokter, room, keluhan: keluhan || '-', durasi, status, lab };
+    // Stamp started_at the moment status becomes "In Treatment" from here
+    // too — the live wait-time estimate on Today's Patient (see
+    // lib/wait-estimate.js) needs a real timestamp regardless of whether
+    // that transition happened via this dialog or the table's inline
+    // Status dropdown. Only stamped on an actual transition into it, so
+    // re-saving other fields while already "In Treatment" doesn't reset
+    // the clock.
+    if (status === 'In Treatment' && appointment.status !== 'In Treatment') {
+      patch.started_at = new Date().toISOString();
+    }
+    const { error } = await supabase.from('appointments').update(patch).eq('id', appointment.id);
     setSaving(false);
 
     if (error) {
