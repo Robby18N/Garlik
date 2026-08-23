@@ -499,16 +499,20 @@ export default function TodaysPatient() {
   // intentionally independent of daySource/visiblePatients: the table
   // already has its own search (Patient Name column) for "who's on
   // today's/tomorrow's schedule". The toolbar's only job is "is this person
-  // in our patient database at all" — always answered with one of the two
-  // popups below, regardless of whether they also happen to be on today's
-  // or tomorrow's list already. Debounced so it doesn't fire a request on
-  // every keystroke while the user is still typing.
+  // in our patient database at all" — answered with one of the two popups
+  // below, regardless of whether they also happen to be on today's or
+  // tomorrow's list already.
+  //
+  // This effect ONLY fetches the autocomplete suggestions as the user types
+  // (debounced so it doesn't fire a request on every keystroke) — it does
+  // NOT open the found/not-found popup by itself anymore. Popping a modal
+  // open the instant typing pauses felt intrusive while the user was still
+  // mid-search or browsing the dropdown. Instead the popup only opens from
+  // an explicit action: pressing Enter (runToolbarSearch, below) or clicking
+  // one of the suggestions (handleSelectSuggestion, below).
   useEffect(() => {
     const trimmed = toolbarQuery.trim();
     if (!trimmed) {
-      setNotFoundOpen(false);
-      setFoundOpen(false);
-      setFoundPatient(null);
       setSuggestions([]);
       setSuggestionsOpen(false);
       setHighlightedIndex(-1);
@@ -517,10 +521,6 @@ export default function TodaysPatient() {
     let cancelled = false;
     const timer = setTimeout(async () => {
       const esc = escapeIlike(trimmed);
-      // limit(6) instead of limit(1): the first row still drives the
-      // existing found/not-found popup below exactly as before, but the
-      // extra rows feed the autocomplete dropdown so the user can see (and
-      // pick) other close matches instead of only the single best one.
       const { data, error } = await supabase
         .from('patients')
         .select('id, mrn, name, phone, category')
@@ -534,19 +534,8 @@ export default function TodaysPatient() {
         return;
       }
 
-      const results = data ?? [];
-      setSuggestions(results);
+      setSuggestions(data ?? []);
       setHighlightedIndex(-1);
-
-      const match = results[0] ?? null;
-      if (match) {
-        setFoundPatient(match);
-        setFoundOpen(true);
-        setNotFoundOpen(false);
-      } else {
-        setNotFoundOpen(true);
-        setFoundOpen(false);
-      }
     }, 500);
     return () => {
       cancelled = true;
@@ -554,10 +543,43 @@ export default function TodaysPatient() {
     };
   }, [toolbarQuery]);
 
+  // Explicit search, run only when the user presses Enter (not on every
+  // keystroke) — queries Supabase directly rather than trusting whatever the
+  // debounced `suggestions` list currently holds, so a fast typist who hits
+  // Enter before the 500ms debounce settles still gets an accurate result
+  // instead of a stale/empty one.
+  async function runToolbarSearch(query) {
+    const trimmed = query.trim();
+    if (!trimmed) return;
+    const esc = escapeIlike(trimmed);
+    const { data, error } = await supabase
+      .from('patients')
+      .select('id, mrn, name, phone, category')
+      .or(`name.ilike.%${esc}%,mrn.ilike.%${esc}%,phone.ilike.%${esc}%`)
+      .limit(1);
+
+    if (error) {
+      console.error('Failed to search patient database', error);
+      return;
+    }
+
+    setSuggestionsOpen(false);
+    const match = data?.[0] ?? null;
+    if (match) {
+      setFoundPatient(match);
+      setFoundOpen(true);
+      setNotFoundOpen(false);
+    } else {
+      setNotFoundOpen(true);
+      setFoundOpen(false);
+    }
+  }
+
   // Picking a suggestion from the autocomplete dropdown jumps straight to
-  // the "found" popup for that exact patient (no need to wait for the
-  // debounce to settle again), fills the field with their full name so it
-  // stays a sensible value if the user keeps editing, and closes the list.
+  // the "found" popup for that exact patient (no extra query needed — we
+  // already have the row from the suggestions fetch), fills the field with
+  // their full name so it stays a sensible value if the user keeps editing,
+  // and closes the list.
   function handleSelectSuggestion(patient) {
     setToolbarQuery(patient.name);
     setFoundPatient(patient);
@@ -568,17 +590,24 @@ export default function TodaysPatient() {
   }
 
   function handleToolbarKeyDown(e) {
-    if (!suggestionsOpen || suggestions.length === 0) return;
+    const dropdownActive = suggestionsOpen && suggestions.length > 0;
     if (e.key === 'ArrowDown') {
+      if (!dropdownActive) return;
       e.preventDefault();
       setHighlightedIndex((i) => (i + 1) % suggestions.length);
     } else if (e.key === 'ArrowUp') {
+      if (!dropdownActive) return;
       e.preventDefault();
       setHighlightedIndex((i) => (i - 1 + suggestions.length) % suggestions.length);
     } else if (e.key === 'Enter') {
-      if (highlightedIndex >= 0) {
-        e.preventDefault();
+      e.preventDefault();
+      // If a suggestion is highlighted (arrowed to, or hovered), Enter picks
+      // it — same as clicking it. Otherwise Enter runs a fresh search for
+      // whatever's typed, matching the "type a name then Enter" flow.
+      if (dropdownActive && highlightedIndex >= 0) {
         handleSelectSuggestion(suggestions[highlightedIndex]);
+      } else {
+        runToolbarSearch(toolbarQuery);
       }
     } else if (e.key === 'Escape') {
       setSuggestionsOpen(false);
