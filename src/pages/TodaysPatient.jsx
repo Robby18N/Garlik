@@ -52,6 +52,7 @@ import PatientDetailSheet from '@/components/patient-detail-sheet';
 import PatientNotFoundDialog from '@/components/patient-not-found-dialog';
 import PatientFoundDialog from '@/components/patient-found-dialog';
 import MakeAppointmentDialog from '@/components/make-appointment-dialog';
+import EditAppointmentDialog from '@/components/edit-appointment-dialog';
 import SettingRoomLabDialog from '@/components/setting-room-lab-dialog';
 import MrCheckIcon from '@/components/mr-check-icon';
 import TodaysPatientSkeleton from '@/components/todays-patient-skeleton';
@@ -443,6 +444,21 @@ export default function TodaysPatient() {
   function handleBookFoundAppointment(patient) {
     setAppointmentPreselect(patient);
     setAppointmentDialogOpen(true);
+  }
+
+  // "Edit Appointment" popup opened from each row's pencil icon — lets
+  // Doctor/Room/Keluhan/Est. Duration/Status/Lab be corrected and saved
+  // straight to the appointment's row in Supabase. Most needed for
+  // appointments booked while their date was still "tomorrow" (so
+  // Status/Lab start out null/"-" per the booking flows' own defaults, see
+  // loadAppointments above) that have since become "today" with no one
+  // having assigned them real values yet.
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingAppointment, setEditingAppointment] = useState(null);
+
+  function handleEditPatient(patient) {
+    setEditingAppointment(patient);
+    setEditDialogOpen(true);
   }
 
   function handleSaveRoomLabSettings(nextSettings) {
@@ -990,7 +1006,7 @@ export default function TodaysPatient() {
                           <button
                             type="button"
                             aria-label={`Edit ${patient.name}`}
-                            onClick={() => console.log('edit patient', patient)}
+                            onClick={() => handleEditPatient(patient)}
                             className="flex size-7 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-700"
                           >
                             <Pencil className="size-4" />
@@ -1036,6 +1052,15 @@ export default function TodaysPatient() {
             }}
             onBooked={loadAppointments}
             preselectedPatient={appointmentPreselect}
+          />
+          <EditAppointmentDialog
+            open={editDialogOpen}
+            onOpenChange={setEditDialogOpen}
+            appointment={editingAppointment}
+            statusOptions={STATUS_OPTIONS}
+            allowedStatusOptions={allowedStatusOptions}
+            onSaved={loadAppointments}
+            onStatusSaved={setStatus}
           />
           <SettingRoomLabDialog
             open={roomLabSettingOpen}
