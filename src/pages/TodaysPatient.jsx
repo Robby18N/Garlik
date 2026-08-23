@@ -78,11 +78,11 @@ const STATUS_STYLES = {
   // in Registration.jsx / make-appointment-dialog.jsx) — NOT "Waiting 10
   // Min", which would falsely claim 10 minutes have already passed for
   // someone who, e.g., was only just booked, or whose doctor is still
-  // mid-treatment with the patient before them. summary-cards.jsx's
-  // STATUS_BUCKETS/doctorWaitingList treat "WL" as part of the same
-  // "Waiting" family as "Waiting 10/20 Min" for counts — keep them in sync
+  // mid-treatment with the patient before them. lib/wait-estimate.js's
+  // isWaitingStatus() treats "Dalam Antrean" as part of the same "Waiting"
+  // family as "Waiting 10/20 Min" for counts/estimates — keep them in sync
   // if this key ever changes again.
-  WL: 'border-transparent bg-[rgba(100,116,139,0.08)] text-[#64748b]',
+  'Dalam Antrean': 'border-transparent bg-[rgba(100,116,139,0.08)] text-[#64748b]',
   'Waiting 10 Min': 'border-transparent bg-[rgba(249,115,22,0.08)] text-[#f97316]',
   'Waiting 20 Min': 'border-transparent bg-[rgba(249,115,22,0.08)] text-[#f97316]',
 };
@@ -381,20 +381,19 @@ export default function TodaysPatient() {
     // booking would've gotten — not a role decision, just catching the
     // record up to what it should already be.
     //
-    // Promoted to the neutral "WL" (Waiting List) status, NOT "Waiting 10
-    // Min" — this just means "hasn't been assessed yet", it doesn't claim
-    // any specific amount of time has actually passed. Picking "Waiting 10
-    // Min" here would be an outright lie the moment it's wrong: e.g.
-    // patient B's appointment lands right after patient A's, whose
-    // 60-minute treatment with the same doctor only just started — B
-    // hasn't waited 10 minutes, they've waited zero. "Waiting 10/20 Min"
-    // stay real observations for staff to set by hand once they're
-    // actually true.
+    // Promoted to the neutral "Dalam Antrean" status, NOT "Waiting 10 Min"
+    // — this just means "hasn't been assessed yet", it doesn't claim any
+    // specific amount of time has actually passed. Picking "Waiting 10 Min"
+    // here would be an outright lie the moment it's wrong: e.g. patient B's
+    // appointment lands right after patient A's, whose 60-minute treatment
+    // with the same doctor only just started — B hasn't waited 10 minutes,
+    // they've waited zero. "Waiting 10/20 Min" stay real observations for
+    // staff to set by hand once they're actually true.
     const idsToPromote = [];
 
     for (const row of data ?? []) {
       const isToday = row.appt_date === todayStr;
-      const resolvedStatus = isToday && !row.status ? 'WL' : row.status;
+      const resolvedStatus = isToday && !row.status ? 'Dalam Antrean' : row.status;
       if (isToday && !row.status) idsToPromote.push(row.id);
 
       // mr (the MR column's badge variant) is purely decorative and
@@ -429,12 +428,12 @@ export default function TodaysPatient() {
     if (idsToPromote.length > 0) {
       const { error: promoteError } = await supabase
         .from('appointments')
-        .update({ status: 'WL' })
+        .update({ status: 'Dalam Antrean' })
         .in('id', idsToPromote);
       if (promoteError) {
-        // Non-fatal — the table still shows "WL" from `resolvedStatus`
-        // above for this session; it just didn't persist, so the next load
-        // would fall back to null again for these rows.
+        // Non-fatal — the table still shows "Dalam Antrean" from
+        // `resolvedStatus` above for this session; it just didn't persist,
+        // so the next load would fall back to null again for these rows.
         console.error('Failed to auto-promote today\'s appointment status', promoteError);
       }
     }

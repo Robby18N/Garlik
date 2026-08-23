@@ -33,8 +33,8 @@ const DEFAULT_STICKY_NOTES = ['Lantai Licin', 'Ada Lalat', 'Toilet'];
 // what the table below it actually showed.
 //
 // isWaitingStatus lives in lib/wait-estimate.js (shared with TodaysPatient's
-// live wait-time estimate) so "WL" counting as part of the "Waiting" family
-// can't drift between the two places that need to agree on it.
+// live wait-time estimate) so "Dalam Antrean" counting as part of the
+// "Waiting" family can't drift between the two places that need to agree on it.
 
 const STATUS_BUCKETS = [
   { label: 'Waiting', dot: 'bg-orange-500', match: isWaitingStatus },
@@ -102,8 +102,9 @@ export default function SummaryCards({ patients, doctorScoped = false }) {
     () =>
       roster
         .filter((p) => isWaitingStatus(p.status))
-        // "WL" has no "Waiting " prefix to strip — replace() is a no-op for
-        // it, so the pill just shows "WL" as-is, matching the Status badge.
+        // "Dalam Antrean" has no "Waiting " prefix to strip — replace() is a
+        // no-op for it, so the pill just shows "Dalam Antrean" as-is,
+        // matching the Status badge.
         .map((p) => ({ name: p.name, wait: p.status.replace('Waiting ', '') })),
     [roster]
   );

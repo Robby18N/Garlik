@@ -266,12 +266,12 @@ export default function Registration() {
         room: patientData.appointmentRoom,
         keluhan: patientData.appointmentKeluhan || '-',
         durasi: patientData.appointmentDuration || '-',
-        // "WL" (Waiting List — neutral, no claimed elapsed time), not
-        // "Waiting 10 Min": this patient hasn't waited any amount of time
-        // yet, they were just registered. Staff bump it to "Waiting 10
-        // Min"/"Waiting 20 Min" once that's actually true. See
-        // TodaysPatient's STATUS_STYLES.
-        status: bucket === 'today' ? 'WL' : null,
+        // "Dalam Antrean" (neutral, no claimed elapsed time), not "Waiting
+        // 10 Min": this patient hasn't waited any amount of time yet, they
+        // were just registered. Staff bump it to "Waiting 10 Min"/"Waiting
+        // 20 Min" once that's actually true. See TodaysPatient's
+        // STATUS_STYLES.
+        status: bucket === 'today' ? 'Dalam Antrean' : null,
         lab: '-',
         remark: '-',
       };
@@ -288,7 +288,7 @@ export default function Registration() {
         room: '-',
         keluhan: 'Registrasi Baru',
         durasi: '-',
-        status: 'WL',
+        status: 'Dalam Antrean',
         lab: '-',
         remark: '-',
       };

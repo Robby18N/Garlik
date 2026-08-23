@@ -1,17 +1,17 @@
 // Queue-based estimated wait time for patients in the "waiting to be seen"
-// family of statuses (WL / Waiting 10 Min / Waiting 20 Min / Late — see
-// TodaysPatient's STATUS_STYLES). This is deliberately an ESTIMATE, not a
-// promise: it's built entirely from planned durations (the `durasi` field,
-// e.g. "60 Min") and, where available, when the doctor's current patient
-// actually started — it has no way to know a treatment is running long
-// until someone still hasn't moved that patient to "Complete".
+// family of statuses (Dalam Antrean / Waiting 10 Min / Waiting 20 Min / Late
+// — see TodaysPatient's STATUS_STYLES). This is deliberately an ESTIMATE,
+// not a promise: it's built entirely from planned durations (the `durasi`
+// field, e.g. "60 Min") and, where available, when the doctor's current
+// patient actually started — it has no way to know a treatment is running
+// long until someone still hasn't moved that patient to "Complete".
 
-// "WL" has no numeric prefix (it's the neutral just-arrived status — see
-// TodaysPatient's STATUS_STYLES), everything else in the family reads
-// "Waiting <n> Min". Exported so summary-cards.jsx can share this instead
-// of keeping its own copy that could drift out of sync.
+// "Dalam Antrean" has no numeric prefix (it's the neutral just-arrived
+// status — see TodaysPatient's STATUS_STYLES), everything else in the
+// family reads "Waiting <n> Min". Exported so summary-cards.jsx can share
+// this instead of keeping its own copy that could drift out of sync.
 export function isWaitingStatus(status) {
-  return typeof status === 'string' && (status === 'WL' || status.startsWith('Waiting'));
+  return typeof status === 'string' && (status === 'Dalam Antrean' || status.startsWith('Waiting'));
 }
 
 // `durasi` is stored as free text like "60 Min" (see DURATIONS in
