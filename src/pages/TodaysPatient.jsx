@@ -119,7 +119,7 @@ const COL_WIDTH = {
   durasi: 'w-[6.04%]',
   status: 'w-[140px]',
   lab: 'w-[3.77%]',
-  remark: 'w-[22.64%]',
+  remark: 'w-[250px]',
   action: 'w-[6.57%]',
 };
 
