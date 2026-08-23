@@ -98,6 +98,11 @@ const STATUS_STYLES = {
 // instead of hard pixel widths means the table always scales to fit its
 // container — no column (in particular Action, at the far right) ever
 // gets cut off regardless of viewport width.
+//
+// A Room-narrower/Status-wider rebalance was tried and reverted — it read
+// as more lopsided, not tidier. The per-cell padding bump below (see the
+// Status and Lab TableCells further down) is what actually fixed the
+// crowding, without touching these proportions.
 const COL_WIDTH = {
   no: 'w-[3.25%]',
   mr: 'w-[3.55%]',
@@ -870,7 +875,7 @@ export default function TodaysPatient() {
               </div>
 
               <div className="flex flex-wrap items-center gap-4">
-                <div id="search-patient-trigger" className="relative w-[300px] max-w-full">
+                <div id="search-patient-trigger" className="relative w-[360px] max-w-full">
                   <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
                   <Input
                     value={toolbarQuery}
@@ -1087,7 +1092,7 @@ export default function TodaysPatient() {
                         {patient.keluhan}
                       </TableCell>
                       <TableCell className="!align-middle px-3 py-3 text-left text-[#334155]">{patient.durasi}</TableCell>
-                      <TableCell className="!align-middle pl-3 pr-6 py-3 text-left">
+                      <TableCell className="!align-middle pl-3 pr-9 py-3 text-left">
                         {(() => {
                           const currentStatus = statusOverrides[patient.id] ?? patient.status;
                           // Tomorrow's not-yet-happened rows have no status
