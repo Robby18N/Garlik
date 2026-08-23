@@ -1087,7 +1087,7 @@ export default function TodaysPatient() {
                         {patient.keluhan}
                       </TableCell>
                       <TableCell className="!align-middle px-3 py-3 text-left text-[#334155]">{patient.durasi}</TableCell>
-                      <TableCell className="!align-middle px-3 py-3 text-left">
+                      <TableCell className="!align-middle pl-3 pr-6 py-3 text-left">
                         {(() => {
                           const currentStatus = statusOverrides[patient.id] ?? patient.status;
                           // Tomorrow's not-yet-happened rows have no status
@@ -1147,7 +1147,7 @@ export default function TodaysPatient() {
                           );
                         })()}
                       </TableCell>
-                      <TableCell className="!align-middle px-3 py-3 text-left text-[#334155]">{labDisplay}</TableCell>
+                      <TableCell className="!align-middle pl-4 pr-3 py-3 text-left text-[#334155]">{labDisplay}</TableCell>
                       <TableCell className="!align-middle px-3 py-3 text-left">
                         <RemarkChatCell
                           patient={patient}
