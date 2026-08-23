@@ -1071,23 +1071,23 @@ export default function TodaysPatient() {
                       key={patient.id}
                       className={cn('border-b border-[#e2e8f0]', index % 2 === 1 && 'bg-[#f8fafc]')}
                     >
-                      <TableCell className="!align-middle py-3 text-left text-[#334155]">{index + 1}</TableCell>
-                      <TableCell className="!align-middle py-3 text-left">
+                      <TableCell className="!align-middle px-3 py-3 text-left text-[#334155]">{index + 1}</TableCell>
+                      <TableCell className="!align-middle px-3 py-3 text-left">
                         <div className="flex items-center justify-start">
                           <MrCheckIcon variant={patient.mr} />
                         </div>
                       </TableCell>
-                      <TableCell className="!align-middle py-3 text-left text-[#334155]">{patient.appt}</TableCell>
-                      <TableCell className="!align-middle py-3 text-left">
+                      <TableCell className="!align-middle px-3 py-3 text-left text-[#334155]">{patient.appt}</TableCell>
+                      <TableCell className="!align-middle px-3 py-3 text-left">
                         <PatientNameHoverCard name={patient.name} category={patient.category} />
                       </TableCell>
-                      <TableCell className="!align-middle py-3 text-left text-[#334155]">{patient.dokter}</TableCell>
-                      <TableCell className="!align-middle py-3 text-left text-[#334155]">{roomDisplay}</TableCell>
-                      <TableCell className="!align-middle py-3 whitespace-normal text-left text-[#334155]">
+                      <TableCell className="!align-middle px-3 py-3 text-left text-[#334155]">{patient.dokter}</TableCell>
+                      <TableCell className="!align-middle px-3 py-3 text-left text-[#334155]">{roomDisplay}</TableCell>
+                      <TableCell className="!align-middle px-3 py-3 whitespace-normal text-left text-[#334155]">
                         {patient.keluhan}
                       </TableCell>
-                      <TableCell className="!align-middle py-3 text-left text-[#334155]">{patient.durasi}</TableCell>
-                      <TableCell className="!align-middle py-3 text-left">
+                      <TableCell className="!align-middle px-3 py-3 text-left text-[#334155]">{patient.durasi}</TableCell>
+                      <TableCell className="!align-middle px-3 py-3 text-left">
                         {(() => {
                           const currentStatus = statusOverrides[patient.id] ?? patient.status;
                           // Tomorrow's not-yet-happened rows have no status
@@ -1147,8 +1147,8 @@ export default function TodaysPatient() {
                           );
                         })()}
                       </TableCell>
-                      <TableCell className="!align-middle py-3 text-left text-[#334155]">{labDisplay}</TableCell>
-                      <TableCell className="!align-middle py-3 text-left">
+                      <TableCell className="!align-middle px-3 py-3 text-left text-[#334155]">{labDisplay}</TableCell>
+                      <TableCell className="!align-middle px-3 py-3 text-left">
                         <RemarkChatCell
                           patient={patient}
                           thread={remarkThreads[patient.id] ?? []}
@@ -1156,7 +1156,7 @@ export default function TodaysPatient() {
                           onSend={handleSendRemark}
                         />
                       </TableCell>
-                      <TableCell className="!align-middle py-3 text-left">
+                      <TableCell className="!align-middle px-3 py-3 text-left">
                         <div className="flex items-center justify-start gap-2">
                           <button
                             type="button"
