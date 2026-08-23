@@ -380,14 +380,25 @@ export default function TodaysPatient() {
       return;
     }
 
-    setRemarkThreads((prev) => ({
-      ...prev,
-      [appointmentId]: (prev[appointmentId] ?? []).map((m) =>
-        m.id === tempId
-          ? { id: `remark-${data.id}`, sender: chatSenderLabel, text, time: nowTimeLabel(new Date(data.created_at)) }
-          : m
-      ),
-    }));
+    const finalId = `remark-${data.id}`;
+    const finalMessage = {
+      id: finalId,
+      sender: chatSenderLabel,
+      text,
+      time: nowTimeLabel(new Date(data.created_at)),
+    };
+    setRemarkThreads((prev) => {
+      // Drop the optimistic placeholder AND any copy the Realtime
+      // subscription above may have already appended for this same row
+      // (a real race: the INSERT can be pushed back to this same browser
+      // before this .insert() call's own response resolves) — then add
+      // exactly one final copy, so the two paths can never leave a
+      // duplicate bubble in the thread no matter which one lands first.
+      const withoutThisMessage = (prev[appointmentId] ?? []).filter(
+        (m) => m.id !== tempId && m.id !== finalId
+      );
+      return { ...prev, [appointmentId]: [...withoutThisMessage, finalMessage] };
+    });
   }
 
   // REQUIRES a one-time migration before this file is deployed — run once
@@ -558,6 +569,60 @@ export default function TodaysPatient() {
   useEffect(() => {
     loadAppointments();
   }, [loadAppointments]);
+
+  // Live updates for the Remark chat (see the `remarks` table and
+  // handleSendRemark above) — without this, a message only ever shows up
+  // for someone else after they refresh or re-open the page. Supabase
+  // Realtime pushes every new row the moment it's inserted, from any
+  // browser/device, so both sides of a Receptionist <-> Doctor
+  // conversation see replies appear on their own.
+  //
+  // REQUIRES one more one-time step in Supabase, in addition to creating
+  // the `remarks` table itself — Realtime only streams changes for tables
+  // explicitly added to its publication:
+  //   alter publication supabase_realtime add table remarks;
+  // Without it, this subscribes successfully but silently never receives
+  // anything — sending/loading remarks still works, they just won't appear
+  // live for anyone else until they refresh.
+  //
+  // Not filtered to only today's/tomorrow's appointment ids — it's simpler
+  // and cheap to just accept every insert and let the dedupe check below
+  // decide whether it's new. An id for an appointment this login doesn't
+  // currently have loaded is harmless: it sits unused in `remarkThreads`
+  // until (if ever) that appointment is loaded.
+  useEffect(() => {
+    const channel = supabase
+      .channel('remarks-live')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'remarks' },
+        (payload) => {
+          const r = payload.new;
+          const messageId = `remark-${r.id}`;
+          setRemarkThreads((prev) => {
+            const existing = prev[r.appointment_id] ?? [];
+            // Skip if this exact message is already in the thread — most
+            // often because it's the sender's own browser, which already
+            // added it optimistically (see handleSendRemark) and may have
+            // already reconciled it to this same id before this event
+            // arrives.
+            if (existing.some((m) => m.id === messageId)) return prev;
+            return {
+              ...prev,
+              [r.appointment_id]: [
+                ...existing,
+                { id: messageId, sender: r.sender, text: r.text, time: nowTimeLabel(new Date(r.created_at)) },
+              ],
+            };
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   // Status is editable by both Doctor and Receptionist now, but each only
   // owns half of it: Doctor moves the clinical side forward (In Treatment /
