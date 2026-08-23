@@ -147,6 +147,14 @@ function nowTimeLabel(date = new Date()) {
 
 const STATUS_OPTIONS = Object.keys(STATUS_STYLES);
 
+// Cancel/Late are the two "this slot isn't happening as scheduled anymore"
+// outcomes (front-desk-owned — see the Status editing comment further
+// down in the component). Once a row lands on either one, keeping it in
+// its original appointment-time slot just clutters the middle of an
+// otherwise-active queue with something no one needs to act on anymore —
+// see visiblePatients' sort below, which sinks these to the bottom.
+const DEPRIORITIZED_STATUSES = ['Cancel', 'Late'];
+
 /**
  * Remark column, reimagined as a two-way chat thread between Receptionist
  * and Doctor instead of a single free-text field — a doctor flagging
@@ -822,15 +830,23 @@ export default function TodaysPatient() {
   // someone who already has an appointment today/tomorrow. The toolbar
   // search above the table is a separate, deliberately disconnected tool:
   // it doesn't touch this list at all, see the effect below.
+  // Checked against `statusOverrides` (not just `patient.status`) so a row
+  // sinks the moment a Receptionist changes it from the inline dropdown,
+  // not only after the next full reload.
   const visiblePatients = useMemo(() => {
     const byName = nameQuery.trim()
       ? daySource.filter((p) => p.name.toLowerCase().includes(nameQuery.trim().toLowerCase()))
       : daySource;
 
-    return [...byName].sort((a, b) =>
-      apptSortAsc ? a.appt.localeCompare(b.appt) : b.appt.localeCompare(a.appt)
-    );
-  }, [daySource, nameQuery, apptSortAsc]);
+    return [...byName].sort((a, b) => {
+      const statusA = statusOverrides[a.id] ?? a.status;
+      const statusB = statusOverrides[b.id] ?? b.status;
+      const aSunk = DEPRIORITIZED_STATUSES.includes(statusA);
+      const bSunk = DEPRIORITIZED_STATUSES.includes(statusB);
+      if (aSunk !== bSunk) return aSunk ? 1 : -1;
+      return apptSortAsc ? a.appt.localeCompare(b.appt) : b.appt.localeCompare(a.appt);
+    });
+  }, [daySource, nameQuery, apptSortAsc, statusOverrides]);
 
   // The toolbar search (Cari Pasien / ID Patient / Nomor Telp) looks
   // patients up directly in the real `patients` table in Supabase — it's
