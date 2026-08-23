@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import { FieldLabel, TextField, SelectField, FieldRow } from '@/components/form-fields';
 import { DOCTORS } from '@/context/role-context';
+import MrCheckIcon, { MEDICAL_RISK_LEVELS } from '@/components/mr-check-icon';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 
@@ -53,6 +54,14 @@ function blankIfPlaceholder(value) {
  * updates an in-memory override (see usePatientStatus/statusOverrides).
  * `onStatusSaved` lets the caller keep that override in sync immediately
  * instead of waiting on the follow-up refetch.
+ *
+ * The Medical Risk (MR) field is a separate write target from everything
+ * else here: it lives on the *patient* row (`appointment.patientId`), not
+ * this appointment, because it's the patient's clinical history — it has
+ * to follow them to every future appointment, not reset per visit. Per the
+ * clinic, only a Doctor may set or change it (`canEditMedicalRisk`); for
+ * any other role the field renders read-only with the current value (or
+ * "belum dinilai" if no Doctor has assessed this patient yet).
  */
 export default function EditAppointmentDialog({
   open,
@@ -60,6 +69,7 @@ export default function EditAppointmentDialog({
   appointment,
   statusOptions,
   allowedStatusOptions,
+  canEditMedicalRisk = false,
   onSaved,
   onStatusSaved,
 }) {
@@ -69,6 +79,7 @@ export default function EditAppointmentDialog({
   const [durasi, setDurasi] = useState('');
   const [status, setStatusField] = useState('');
   const [lab, setLab] = useState('-');
+  const [medicalRisk, setMedicalRisk] = useState(null);
   const [saving, setSaving] = useState(false);
 
   // Re-seed the form fields every time a (possibly different) appointment
@@ -83,6 +94,7 @@ export default function EditAppointmentDialog({
     setDurasi(blankIfPlaceholder(appointment.durasi));
     setStatusField(appointment.status ?? '');
     setLab(appointment.lab || '-');
+    setMedicalRisk(appointment.medicalRiskLevel ?? null);
   }, [open, appointment]);
 
   async function handleSave() {
@@ -110,12 +122,30 @@ export default function EditAppointmentDialog({
       patch.started_at = new Date().toISOString();
     }
     const { error } = await supabase.from('appointments').update(patch).eq('id', appointment.id);
+
+    // Medical Risk is a separate write to the *patient* row, not this
+    // appointment — only attempted when this login is actually allowed to
+    // set it and there's a real patient row to attach it to. A failure
+    // here is reported but doesn't block the appointment fields above from
+    // having already saved successfully.
+    let riskError = null;
+    if (canEditMedicalRisk && appointment.patientId) {
+      const { error: err } = await supabase
+        .from('patients')
+        .update({ medical_risk_level: medicalRisk })
+        .eq('id', appointment.patientId);
+      riskError = err;
+    }
     setSaving(false);
 
     if (error) {
       console.error('Failed to update appointment', error);
       toast.error('Gagal menyimpan perubahan — coba lagi.');
       return;
+    }
+    if (riskError) {
+      console.error('Failed to update patient medical risk level', riskError);
+      toast.error('Data appointment tersimpan, tapi penilaian risiko medis gagal disimpan — coba lagi.');
     }
 
     toast.success(`Data appointment ${appointment.name} berhasil diperbarui`);
@@ -211,6 +241,47 @@ export default function EditAppointmentDialog({
                   ))}
                 </select>
                 <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-[#64748b]" />
+              </div>
+            </div>
+          </FieldRow>
+
+          <FieldRow className="flex-wrap">
+            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+              <FieldLabel>Penilaian Risiko Medis (MR)</FieldLabel>
+              {!canEditMedicalRisk && (
+                <p className="text-xs text-[#94a3b8]">
+                  Hanya Dokter yang bisa menentukan atau mengubah penilaian ini.
+                </p>
+              )}
+              <div className="flex flex-col gap-2">
+                {MEDICAL_RISK_LEVELS.map((level) => (
+                  <label
+                    key={level.value}
+                    className={cn(
+                      'flex items-start gap-2.5 rounded-lg border border-solid px-3 py-2.5',
+                      medicalRisk === level.value
+                        ? 'border-[#3b82f6] bg-[rgba(59,130,246,0.05)]'
+                        : 'border-[#e2e8f0] bg-white',
+                      canEditMedicalRisk ? 'cursor-pointer' : 'cursor-not-allowed opacity-70'
+                    )}
+                  >
+                    <input
+                      type="radio"
+                      name="medical-risk"
+                      className="mt-0.5 size-4 accent-[#3b82f6]"
+                      checked={medicalRisk === level.value}
+                      disabled={!canEditMedicalRisk}
+                      onChange={() => setMedicalRisk(level.value)}
+                    />
+                    <div className="flex flex-col gap-0.5">
+                      <span className="flex items-center gap-1.5 text-sm font-medium text-[#020617]">
+                        <MrCheckIcon variant={level.value} />
+                        {level.label}
+                      </span>
+                      <span className="text-xs text-[#64748b]">{level.description}</span>
+                    </div>
+                  </label>
+                ))}
               </div>
             </div>
           </FieldRow>

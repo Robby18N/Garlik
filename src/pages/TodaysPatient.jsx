@@ -54,7 +54,7 @@ import PatientFoundDialog from '@/components/patient-found-dialog';
 import MakeAppointmentDialog from '@/components/make-appointment-dialog';
 import EditAppointmentDialog from '@/components/edit-appointment-dialog';
 import SettingRoomLabDialog from '@/components/setting-room-lab-dialog';
-import MrCheckIcon from '@/components/mr-check-icon';
+import MrCheckIcon, { medicalRiskDescription } from '@/components/mr-check-icon';
 import TodaysPatientSkeleton from '@/components/todays-patient-skeleton';
 import roomsLabsIcon from '@/assets/rooms-labs-icon.png';
 import { useRole } from '@/context/role-context';
@@ -363,8 +363,14 @@ export default function TodaysPatient() {
       // in Supabase (see the migration note above loadAppointments' call
       // sites) — selecting a column that doesn't exist yet fails the whole
       // query, so that migration must run before this code is deployed.
+      // patients(id, ...medical_risk_level): id is needed so the Edit
+      // dialog can save a Doctor's risk assessment back to the right
+      // patient row; medical_risk_level is that assessment itself (see
+      // mr-check-icon.jsx's MEDICAL_RISK_LEVELS) — both require the
+      // `alter table patients add column if not exists medical_risk_level
+      // smallint;` migration to already be run in Supabase.
       .select(
-        'id, appt_date, appt_time, dokter, room, keluhan, durasi, status, lab, remark, started_at, patients(mrn, name, category, phone)'
+        'id, appt_date, appt_time, dokter, room, keluhan, durasi, status, lab, remark, started_at, patients(id, mrn, name, category, phone, medical_risk_level)'
       )
       .order('appt_time', { ascending: true });
 
@@ -406,12 +412,15 @@ export default function TodaysPatient() {
       const resolvedStatus = isToday && !row.status ? 'Dalam Antrean' : row.status;
       if (isToday && !row.status) idsToPromote.push(row.id);
 
-      // mr (the MR column's badge variant) is purely decorative and
-      // isn't part of the schema — every real row defaults to the most
-      // common variant (2) rather than encoding it in the database.
       const mapped = {
         id: row.id,
-        mr: 2,
+        patientId: row.patients?.id ?? null,
+        // The MR column's icon reflects a Doctor's own clinical risk
+        // assessment of this *patient* (not this appointment) — see
+        // mr-check-icon.jsx's MEDICAL_RISK_LEVELS. null means no Doctor
+        // has assessed them yet, which renders as a neutral "?" rather
+        // than defaulting to any of the three real levels.
+        medicalRiskLevel: row.patients?.medical_risk_level ?? null,
         appt: row.appt_time,
         name: row.patients?.name ?? '(Tidak diketahui)',
         category: row.patients?.category ?? 'Regular',
@@ -1083,8 +1092,11 @@ export default function TodaysPatient() {
                     >
                       <TableCell className="!align-middle px-3 py-3 text-left text-[#334155]">{index + 1}</TableCell>
                       <TableCell className="!align-middle px-3 py-3 text-left">
-                        <div className="flex items-center justify-start">
-                          <MrCheckIcon variant={patient.mr} />
+                        <div
+                          className="flex items-center justify-start"
+                          title={medicalRiskDescription(patient.medicalRiskLevel)}
+                        >
+                          <MrCheckIcon variant={patient.medicalRiskLevel} />
                         </div>
                       </TableCell>
                       <TableCell className="!align-middle px-3 py-3 text-left text-[#334155]">{patient.appt}</TableCell>
@@ -1233,6 +1245,7 @@ export default function TodaysPatient() {
             appointment={editingAppointment}
             statusOptions={STATUS_OPTIONS}
             allowedStatusOptions={allowedStatusOptions}
+            canEditMedicalRisk={isDoctor}
             onSaved={loadAppointments}
             onStatusSaved={setStatus}
           />

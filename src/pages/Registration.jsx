@@ -17,9 +17,11 @@ import {
   SectionHeader,
   FieldRow,
 } from '@/components/form-fields';
-import { resolveDayBucket } from '@/lib/utils';
+import { resolveDayBucket, cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { generateNextMrn } from '@/lib/patients';
+import { useRole } from '@/context/role-context';
+import MrCheckIcon, { MEDICAL_RISK_LEVELS } from '@/components/mr-check-icon';
 
 // "HH:MM" for a walk-in registration's Appt column (no appointment was
 // actually booked) — same hand-rolled format used everywhere else in the
@@ -167,10 +169,21 @@ export default function Registration() {
   const isAppointmentFlow = location.state?.flow === 'make-appointment';
   const STEPS = isAppointmentFlow ? STEPS_WITH_APPOINTMENT : STEPS_DEFAULT;
 
+  const { role } = useRole();
+  const isDoctor = role === 'Doctor';
+
   const [step, setStep] = useState(0);
   const [patientData, setPatientData] = useState(initialPatientData);
   const [medicalData, setMedicalData] = useState(initialMedicalData);
   const [conditions, setConditions] = useState({});
+  // Doctor's own clinical risk assessment of this new patient (see
+  // mr-check-icon.jsx's MEDICAL_RISK_LEVELS) — only a Doctor account can
+  // set this at registration time; left null (not yet assessed) when a
+  // Receptionist/Admin does the registration instead, same as it would be
+  // for any patient nobody's assessed yet. It's a snapshot at intake — a
+  // Doctor can always set or correct it later via Today's Patient's Edit
+  // (pencil) dialog once they've actually examined the patient.
+  const [medicalRisk, setMedicalRisk] = useState(null);
   const [saving, setSaving] = useState(false);
 
   function updatePatient(field, value) {
@@ -315,6 +328,13 @@ export default function Registration() {
           registered_since: new Date().toISOString().slice(0, 10),
           allergies: medicalData.allergyHistory ? [medicalData.allergyHistory] : [],
           medical_notes: markedConditions,
+          // Only actually a Doctor's assessment when a Doctor is the one
+          // registering — isDoctor already gates the field itself (see the
+          // Medical Record step below), this is just the same guard again
+          // so a stray client-side state value can never masquerade as a
+          // clinical assessment nobody with the authority to make it
+          // actually gave.
+          medical_risk_level: isDoctor ? medicalRisk : null,
         })
         .select('id')
         .single();
@@ -710,6 +730,48 @@ export default function Registration() {
                             onChange={(value) => updateCondition(field, value)}
                           />
                         ))}
+                      </div>
+
+                      <div className="mt-6 border-t border-[#e2e8f0] pt-6">
+                        <Label className="text-sm font-medium text-slate-700">
+                          Penilaian Risiko Medis (MR)
+                        </Label>
+                        {!isDoctor && (
+                          <p className="mt-1 text-xs text-slate-400">
+                            Hanya akun Dokter yang bisa mengisi penilaian ini — bisa diisi/diubah
+                            nanti oleh Dokter lewat tombol Edit di Today&apos;s Patient.
+                          </p>
+                        )}
+                        <div className="mt-3 flex flex-col gap-2">
+                          {MEDICAL_RISK_LEVELS.map((level) => (
+                            <label
+                              key={level.value}
+                              className={cn(
+                                'flex items-start gap-2.5 rounded-lg border border-solid px-3 py-2.5',
+                                medicalRisk === level.value
+                                  ? 'border-[#3b82f6] bg-[rgba(59,130,246,0.05)]'
+                                  : 'border-slate-200 bg-white',
+                                isDoctor ? 'cursor-pointer' : 'cursor-not-allowed opacity-70'
+                              )}
+                            >
+                              <input
+                                type="radio"
+                                name="medical-risk"
+                                className="mt-0.5 size-4 accent-[#3b82f6]"
+                                checked={medicalRisk === level.value}
+                                disabled={!isDoctor}
+                                onChange={() => setMedicalRisk(level.value)}
+                              />
+                              <div className="flex flex-col gap-0.5">
+                                <span className="flex items-center gap-1.5 text-sm font-medium text-slate-950">
+                                  <MrCheckIcon variant={level.value} />
+                                  {level.label}
+                                </span>
+                                <span className="text-xs text-slate-500">{level.description}</span>
+                              </div>
+                            </label>
+                          ))}
+                        </div>
                       </div>
 
                       <div className="mt-6 border-t border-[#e2e8f0] pt-6">
