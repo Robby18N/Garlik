@@ -67,8 +67,18 @@ const STATUS_BREAKDOWN = [
 // real patient list (Today's Patient's status field) instead of a fixed
 // mock — used only for the doctor-scoped variant, where the numbers have
 // to actually reflect that doctor's own roster.
+// "WL" (Waiting List — TodaysPatient's neutral just-arrived status, before
+// any real wait time has been observed) counts as part of the same
+// "Waiting" family as "Waiting 10 Min"/"Waiting 20 Min" here — it just
+// isn't a `startsWith('Waiting')` match since the label itself is
+// deliberately shortened to line up with this section's own "Waiting list"
+// stat card. Keep this in sync with TodaysPatient's STATUS_STYLES.
+function isWaitingStatus(status) {
+  return typeof status === 'string' && (status === 'WL' || status.startsWith('Waiting'));
+}
+
 const STATUS_BUCKETS = [
-  { label: 'Waiting', dot: 'bg-orange-500', match: (s) => typeof s === 'string' && s.startsWith('Waiting') },
+  { label: 'Waiting', dot: 'bg-orange-500', match: isWaitingStatus },
   { label: 'Complete', dot: 'bg-green-500', match: (s) => s === 'Complete' },
   { label: 'Late', dot: 'bg-purple-500', match: (s) => s === 'Late' },
   { label: 'Cancel', dot: 'bg-red-500', match: (s) => s === 'Cancel' },
@@ -127,7 +137,9 @@ export default function SummaryCards({ patients, doctorScoped = false }) {
   const doctorWaitingList = useMemo(
     () =>
       doctorRoster
-        .filter((p) => typeof p.status === 'string' && p.status.startsWith('Waiting'))
+        .filter((p) => isWaitingStatus(p.status))
+        // "WL" has no "Waiting " prefix to strip — replace() is a no-op for
+        // it, so the pill just shows "WL" as-is, matching the Status badge.
         .map((p) => ({ name: p.name, wait: p.status.replace('Waiting ', '') })),
     [doctorRoster]
   );

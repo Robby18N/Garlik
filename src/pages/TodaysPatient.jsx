@@ -68,6 +68,20 @@ const STATUS_STYLES = {
   'In Treatment': 'border-transparent bg-[rgba(59,130,246,0.08)] text-[#3b82f6]',
   Late: 'border-transparent bg-[rgba(168,85,247,0.08)] text-[#a855f7]',
   Cancel: 'border-transparent bg-[rgba(239,68,68,0.08)] text-[#ef4444]',
+  // Neutral "just arrived, hasn't been timed yet" state — short for
+  // "Waiting List", matching the "Waiting list" summary card above the
+  // table — and deliberately a different (gray, not orange) color from the
+  // two below so it reads as "not yet assessed" rather than "already
+  // confirmed waiting X minutes". This is what a brand-new appointment
+  // starts as (see loadAppointments' auto-promotion and the booking flows
+  // in Registration.jsx / make-appointment-dialog.jsx) — NOT "Waiting 10
+  // Min", which would falsely claim 10 minutes have already passed for
+  // someone who, e.g., was only just booked, or whose doctor is still
+  // mid-treatment with the patient before them. summary-cards.jsx's
+  // STATUS_BUCKETS/doctorWaitingList treat "WL" as part of the same
+  // "Waiting" family as "Waiting 10/20 Min" for counts — keep them in sync
+  // if this key ever changes again.
+  WL: 'border-transparent bg-[rgba(100,116,139,0.08)] text-[#64748b]',
   'Waiting 10 Min': 'border-transparent bg-[rgba(249,115,22,0.08)] text-[#f97316]',
   'Waiting 20 Min': 'border-transparent bg-[rgba(249,115,22,0.08)] text-[#f97316]',
 };
@@ -342,8 +356,32 @@ export default function TodaysPatient() {
     const nextToday = [];
     const nextTomorrow = [];
     const nextThreads = {};
+    // Appointments booked while their date was still "tomorrow" start with
+    // status=null, per the booking flows' own defaults (MakeAppointmentDialog
+    // / Registration.jsx only auto-set a starting status for a same-day
+    // booking). Nothing used to promote that null once the date actually
+    // arrived, so it just sat blank in Today's Patient until a receptionist
+    // or doctor happened to notice and fix it by hand. Collected here so it
+    // can be corrected in the same load, same starting point a same-day
+    // booking would've gotten — not a role decision, just catching the
+    // record up to what it should already be.
+    //
+    // Promoted to the neutral "WL" (Waiting List) status, NOT "Waiting 10
+    // Min" — this just means "hasn't been assessed yet", it doesn't claim
+    // any specific amount of time has actually passed. Picking "Waiting 10
+    // Min" here would be an outright lie the moment it's wrong: e.g.
+    // patient B's appointment lands right after patient A's, whose
+    // 60-minute treatment with the same doctor only just started — B
+    // hasn't waited 10 minutes, they've waited zero. "Waiting 10/20 Min"
+    // stay real observations for staff to set by hand once they're
+    // actually true.
+    const idsToPromote = [];
 
     for (const row of data ?? []) {
+      const isToday = row.appt_date === todayStr;
+      const resolvedStatus = isToday && !row.status ? 'WL' : row.status;
+      if (isToday && !row.status) idsToPromote.push(row.id);
+
       // mr (the MR column's badge variant) is purely decorative and
       // isn't part of the schema — every real row defaults to the most
       // common variant (2) rather than encoding it in the database.
@@ -357,7 +395,7 @@ export default function TodaysPatient() {
         room: row.room,
         keluhan: row.keluhan,
         durasi: row.durasi,
-        status: row.status,
+        status: resolvedStatus,
         lab: row.lab,
         remark: row.remark,
         phone: row.patients?.phone ?? '',
@@ -368,8 +406,21 @@ export default function TodaysPatient() {
           ? [{ id: `${row.id}-seed`, sender: 'Receptionist', text: row.remark, time: row.appt_time }]
           : [];
 
-      if (row.appt_date === todayStr) nextToday.push(mapped);
+      if (isToday) nextToday.push(mapped);
       else if (row.appt_date === tomorrowStr) nextTomorrow.push(mapped);
+    }
+
+    if (idsToPromote.length > 0) {
+      const { error: promoteError } = await supabase
+        .from('appointments')
+        .update({ status: 'WL' })
+        .in('id', idsToPromote);
+      if (promoteError) {
+        // Non-fatal — the table still shows "WL" from `resolvedStatus`
+        // above for this session; it just didn't persist, so the next load
+        // would fall back to null again for these rows.
+        console.error('Failed to auto-promote today\'s appointment status', promoteError);
+      }
     }
 
     setTodayPatients(nextToday);

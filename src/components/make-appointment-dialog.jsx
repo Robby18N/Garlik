@@ -161,7 +161,11 @@ export default function MakeAppointmentDialog({
       room: appointment.room,
       keluhan: appointment.keluhan || '-',
       durasi: appointment.duration || '-',
-      status: resolveDayBucket(appointment.date) === 'today' ? 'Waiting 10 Min' : null,
+      // "WL" (Waiting List — neutral, no claimed elapsed time), not
+      // "Waiting 10 Min": this patient hasn't waited any amount of time yet,
+      // they were just booked. Staff bump it to "Waiting 10 Min"/"Waiting 20
+      // Min" once that's actually true. See TodaysPatient's STATUS_STYLES.
+      status: resolveDayBucket(appointment.date) === 'today' ? 'WL' : null,
       lab: '-',
       remark: '-',
     });
