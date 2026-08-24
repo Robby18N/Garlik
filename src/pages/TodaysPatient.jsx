@@ -61,7 +61,7 @@ import { useRole } from '@/context/role-context';
 import { usePatientStatus } from '@/context/patient-status-context';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
-import { escapeIlike } from '@/lib/patients';
+import { escapeIlike, fetchLastVisit } from '@/lib/patients';
 import { computeWaitEstimates, isWaitingStatus } from '@/lib/wait-estimate';
 
 const STATUS_STYLES = {
@@ -923,6 +923,13 @@ export default function TodaysPatient() {
       setFoundPatient(match);
       setFoundOpen(true);
       setNotFoundOpen(false);
+      // Fetched separately (not part of the initial patients query above) so
+      // the dialog opens immediately instead of waiting on a second
+      // round-trip — the "Kunjungan terakhir" line just fills in a beat
+      // later. Guarded by id so a fast second search can't have its result
+      // clobbered by a slow first one resolving after it.
+      const lastVisit = await fetchLastVisit(match.id);
+      setFoundPatient((prev) => (prev?.id === match.id ? { ...prev, lastVisit } : prev));
     } else {
       setNotFoundOpen(true);
       setFoundOpen(false);
@@ -934,13 +941,15 @@ export default function TodaysPatient() {
   // already have the row from the suggestions fetch), fills the field with
   // their full name so it stays a sensible value if the user keeps editing,
   // and closes the list.
-  function handleSelectSuggestion(patient) {
+  async function handleSelectSuggestion(patient) {
     setToolbarQuery(patient.name);
     setFoundPatient(patient);
     setFoundOpen(true);
     setNotFoundOpen(false);
     setSuggestionsOpen(false);
     setHighlightedIndex(-1);
+    const lastVisit = await fetchLastVisit(patient.id);
+    setFoundPatient((prev) => (prev?.id === patient.id ? { ...prev, lastVisit } : prev));
   }
 
   function handleToolbarKeyDown(e) {

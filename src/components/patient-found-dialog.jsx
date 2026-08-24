@@ -64,9 +64,26 @@ export default function PatientFoundDialog({ open, onOpenChange, patient, onBook
                 : 'This patient is registered but not scheduled today. Make an appointment for them below.'}
             </p>
             {patient && (
-              <p className="text-sm font-medium text-[#020617]">
-                {patient.name} &middot; {patient.mrn}
-              </p>
+              <>
+                <p className="text-sm font-medium text-[#020617]">
+                  {patient.name} &middot; {patient.mrn}
+                </p>
+                {/* patient.lastVisit is undefined while the follow-up query
+                    (TodaysPatient's runToolbarSearch/handleSelectSuggestion)
+                    is still in flight, null once it resolves to "no real
+                    visit on record", or {date, treatment} for a real one —
+                    so this line simply doesn't render until there's an
+                    actual answer, rather than flashing a placeholder. */}
+                {patient.lastVisit !== undefined && (
+                  <p className="text-xs text-[#64748b]">
+                    {patient.lastVisit
+                      ? `Kunjungan terakhir: ${patient.lastVisit.date}${
+                          patient.lastVisit.treatment ? ` · ${patient.lastVisit.treatment}` : ''
+                        }`
+                      : 'Belum pernah berkunjung sebelumnya'}
+                  </p>
+                )}
+              </>
             )}
           </div>
 

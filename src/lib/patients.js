@@ -25,3 +25,47 @@ export async function generateNextMrn() {
 export function escapeIlike(value) {
   return value.replace(/[%_]/g, '\\$&');
 }
+
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+// Converts a Supabase `date` column (plain "2026-08-10" string, no time/TZ
+// component) into the short human-readable label used across the app
+// ("10 Aug 2026"). The literal "T00:00:00" anchors the parse to local
+// midnight rather than UTC midnight, so it can't roll back a day in
+// negative-UTC-offset timezones.
+export function formatDisplayDate(isoDate) {
+  if (!isoDate) return null;
+  const parsed = new Date(`${isoDate}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return `${parsed.getDate()} ${MONTH_NAMES[parsed.getMonth()]} ${parsed.getFullYear()}`;
+}
+
+// Finds a patient's most recent genuine past visit (an appointment dated
+// today-or-earlier that wasn't Cancelled — a cancelled slot never actually
+// happened) — used by PatientFoundDialog ("Patient search results") to
+// give the receptionist/doctor a quick heads-up on this patient's history
+// before booking a new appointment for them. Returns null when the patient
+// has no real visit on record yet.
+export async function fetchLastVisit(patientId) {
+  const { data, error } = await supabase
+    .from('appointments')
+    .select('appt_date, keluhan, status')
+    .eq('patient_id', patientId)
+    .order('appt_date', { ascending: false });
+
+  if (error) {
+    console.error('Failed to load last visit for patient', patientId, error);
+    return null;
+  }
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const lastReal = (data ?? []).find(
+    (a) => a.appt_date && a.appt_date <= todayStr && a.status !== 'Cancel'
+  );
+  if (!lastReal) return null;
+
+  return {
+    date: formatDisplayDate(lastReal.appt_date),
+    treatment: lastReal.keluhan && lastReal.keluhan !== '-' ? lastReal.keluhan : null,
+  };
+}
