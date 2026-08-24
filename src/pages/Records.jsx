@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Moon, Bell, Search, X, Eye, Users, Star, UserPlus, Repeat2 } from 'lucide-react';
 
 import { Input } from '@/components/ui/input';
@@ -24,184 +24,25 @@ import PatientNameHoverCard from '@/components/patient-name-hover-card';
 import PatientDetailSheet from '@/components/patient-detail-sheet';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { supabase } from '@/lib/supabase';
 
 const CATEGORY_DOT = { VVIP: 'bg-amber-500', VIP: 'bg-green-500', Regular: 'bg-slate-400' };
 
-// Master patient records — a persistent roster independent of any single
-// day's schedule (unlike Today's Patient), enriched with the fields the
-// Records menu is scoped to show: MR number, demographics, registration
-// date, visit history (with payment status per visit for Billing context),
-// basic medical background (allergies/conditions, read-only here), and
-// per-visit clinical notes gated to the Doctor role in PatientDetailSheet.
-const RECORDS_PATIENTS_INITIAL = [
-  {
-    id: 1, mrn: 'P-0001', name: 'Agung Wijaya Kusuma', category: 'VIP', gender: 'Laki-laki', age: 34,
-    phone: '0813-2037-6091', address: 'Jl. Kemang Raya No. 12, Jakarta Selatan',
-    patientType: 'Umum', registeredSince: '14 Jan 2023', lastVisit: '10 Aug 2026', totalVisits: 9,
-    allergies: ['Penisilin'], medicalNotes: ['Hipertensi'],
-    visitHistory: [
-      { date: '10 Aug 2026', doctor: 'drg. SM', treatment: 'Scaling', payment: 'Paid', diagnosis: 'Karang gigi ringan', prescription: 'Obat kumur antiseptik' },
-      { date: '02 May 2026', doctor: 'drg. SM', treatment: 'Tambal Gigi', payment: 'Paid', diagnosis: 'Karies dentin M1 kanan bawah', prescription: 'Asam mefenamat 500mg 3x1' },
-      { date: '18 Jan 2026', doctor: 'drg. AN', treatment: 'Konsultasi', payment: 'Paid', diagnosis: 'Gigi sensitif', prescription: 'Pasta gigi sensitif' },
-    ],
-    appointments: [{ reason: 'Kontrol Scaling', doctor: 'drg. SM', date: '20 Nov 2026' }],
-  },
-  {
-    id: 2, mrn: 'P-0002', name: 'Siti Rahmawati', category: 'Regular', gender: 'Perempuan', age: 27,
-    phone: '0821-2074-6182', address: 'Jl. Melati No. 4, Bandung',
-    patientType: 'BPJS', registeredSince: '02 Mar 2024', lastVisit: '10 Aug 2026', totalVisits: 4,
-    allergies: [], medicalNotes: [],
-    visitHistory: [
-      { date: '10 Aug 2026', doctor: 'drg. AN', treatment: 'Tambal Gigi', payment: 'Paid', diagnosis: 'Karies email M2 kiri atas', prescription: 'Tidak ada' },
-      { date: '15 Feb 2026', doctor: 'drg. AN', treatment: 'Konsultasi', payment: 'Paid', diagnosis: 'Gigi berlubang awal', prescription: 'Fluoride topikal' },
-    ],
-    appointments: [],
-  },
-  {
-    id: 3, mrn: 'P-0003', name: 'Budi Santoso', category: 'Regular', gender: 'Laki-laki', age: 41,
-    phone: '0822-2111-6273', address: 'Jl. Sudirman No. 88, Jakarta Pusat',
-    patientType: 'Umum', registeredSince: '20 Jun 2022', lastVisit: '10 Aug 2026', totalVisits: 12,
-    allergies: [], medicalNotes: ['Diabetes Tipe 2'],
-    visitHistory: [
-      { date: '10 Aug 2026', doctor: 'drg. SM', treatment: 'Scaling', payment: 'Unpaid', diagnosis: 'Karang gigi sedang', prescription: 'Obat kumur antiseptik' },
-      { date: '22 Mar 2026', doctor: 'drg. SM', treatment: 'Cabut Gigi', payment: 'Paid', diagnosis: 'Gigi bungsu impaksi', prescription: 'Amoxicillin 500mg 3x1, Asam mefenamat 500mg 3x1' },
-    ],
-    appointments: [],
-  },
-  {
-    id: 4, mrn: 'P-0004', name: 'Dewi Lestari', category: 'VVIP', gender: 'Perempuan', age: 52,
-    phone: '0851-2148-6364', address: 'Jl. Pahlawan No. 21, Surabaya',
-    patientType: 'Asuransi Swasta', registeredSince: '05 Sep 2021', lastVisit: '10 Aug 2026', totalVisits: 21,
-    allergies: ['Lateks'], medicalNotes: ['Osteoporosis'],
-    visitHistory: [
-      { date: '10 Aug 2026', doctor: 'drg. RF', treatment: 'Sakit Gigi', payment: 'Paid', diagnosis: 'Pulpitis reversibel M1 kiri bawah', prescription: 'Asam mefenamat 500mg 3x1' },
-      { date: '01 Jun 2026', doctor: 'drg. RF', treatment: 'Whitening', payment: 'Paid', diagnosis: 'Diskolorasi ekstrinsik', prescription: 'Tidak ada' },
-      { date: '14 Feb 2026', doctor: 'drg. RF', treatment: 'Konsultasi', payment: 'Paid', diagnosis: 'Evaluasi rutin', prescription: 'Tidak ada' },
-    ],
-    appointments: [{ reason: 'Kontrol Pulpitis', doctor: 'drg. RF', date: '25 Aug 2026' }],
-  },
-  {
-    id: 5, mrn: 'P-0005', name: 'Andi Pratama', category: 'Regular', gender: 'Laki-laki', age: 19,
-    phone: '0852-2185-6455', address: 'Jl. Anggrek No. 7, Depok',
-    patientType: 'Umum', registeredSince: '11 Nov 2025', lastVisit: '10 Aug 2026', totalVisits: 2,
-    allergies: [], medicalNotes: [],
-    visitHistory: [
-      { date: '10 Aug 2026', doctor: 'drg. AN', treatment: 'Tambal Gigi', payment: 'Partial', diagnosis: 'Karies dentin P1 kanan atas', prescription: 'Tidak ada' },
-    ],
-    appointments: [],
-  },
-  {
-    id: 6, mrn: 'P-0006', name: 'Rina Marlina', category: 'VIP', gender: 'Perempuan', age: 30,
-    phone: '0895-2222-6546', address: 'Jl. Cendrawasih No. 15, Bekasi',
-    patientType: 'Umum', registeredSince: '30 Jul 2023', lastVisit: '10 Aug 2026', totalVisits: 7,
-    allergies: ['Ibuprofen'], medicalNotes: [],
-    visitHistory: [
-      { date: '10 Aug 2026', doctor: 'drg. SM', treatment: 'Gigi Sensitif', payment: 'Paid', diagnosis: 'Resesi gingiva ringan', prescription: 'Pasta gigi sensitif' },
-      { date: '19 Apr 2026', doctor: 'drg. SM', treatment: 'Scaling', payment: 'Paid', diagnosis: 'Karang gigi ringan', prescription: 'Obat kumur antiseptik' },
-    ],
-    appointments: [],
-  },
-  {
-    id: 7, mrn: 'P-0007', name: 'Fajar Hidayat', category: 'Regular', gender: 'Laki-laki', age: 45,
-    phone: '0896-2259-6637', address: 'Jl. Diponegoro No. 33, Semarang',
-    patientType: 'BPJS', registeredSince: '08 Apr 2022', lastVisit: '10 Aug 2026', totalVisits: 15,
-    allergies: [], medicalNotes: ['Hipertensi'],
-    visitHistory: [
-      { date: '10 Aug 2026', doctor: 'drg. RF', treatment: 'Cabut Gigi', payment: 'Paid', diagnosis: 'Gigi bungsu impaksi parsial', prescription: 'Amoxicillin 500mg 3x1' },
-    ],
-    appointments: [],
-  },
-  {
-    id: 8, mrn: 'P-0008', name: 'Nur Aisyah', category: 'Regular', gender: 'Perempuan', age: 23,
-    phone: '0812-2296-6728', address: 'Jl. Kenanga No. 9, Tangerang',
-    patientType: 'Umum', registeredSince: '17 Dec 2024', lastVisit: '10 Aug 2026', totalVisits: 3,
-    allergies: [], medicalNotes: [],
-    visitHistory: [
-      { date: '10 Aug 2026', doctor: 'drg. AN', treatment: 'Karang Gigi', payment: 'Paid', diagnosis: 'Karang gigi ringan', prescription: 'Tidak ada' },
-    ],
-    appointments: [],
-  },
-  {
-    id: 9, mrn: 'P-0009', name: 'Dimas Saputra', category: 'Regular', gender: 'Laki-laki', age: 29,
-    phone: '0813-2333-6819', address: 'Jl. Flamboyan No. 5, Bogor',
-    patientType: 'Umum', registeredSince: '25 Aug 2023', lastVisit: '10 Aug 2026', totalVisits: 6,
-    allergies: [], medicalNotes: [],
-    visitHistory: [
-      { date: '10 Aug 2026', doctor: 'drg. SM', treatment: 'Gigi Berlubang', payment: 'Unpaid', diagnosis: 'Karies dentin M2 kiri bawah', prescription: 'Asam mefenamat 500mg 3x1' },
-    ],
-    appointments: [],
-  },
-  {
-    id: 10, mrn: 'P-0010', name: 'Maya Sari', category: 'Regular', gender: 'Perempuan', age: 37,
-    phone: '0821-2370-6910', address: 'Jl. Teratai No. 18, Jakarta Timur',
-    patientType: 'Asuransi Swasta', registeredSince: '13 Feb 2024', lastVisit: '10 Aug 2026', totalVisits: 5,
-    allergies: ['Sulfa'], medicalNotes: [],
-    visitHistory: [
-      { date: '10 Aug 2026', doctor: 'drg. RF', treatment: 'Konsultasi', payment: 'Paid', diagnosis: 'Evaluasi rutin', prescription: 'Tidak ada' },
-    ],
-    appointments: [],
-  },
-  {
-    id: 11, mrn: 'P-0011', name: 'Putri Amelia', category: 'VIP', gender: 'Perempuan', age: 26,
-    phone: '0851-2444-7092', address: 'Jl. Mawar No. 2, Jakarta Selatan',
-    patientType: 'Umum', registeredSince: '19 May 2023', lastVisit: '10 Aug 2026', totalVisits: 8,
-    allergies: [], medicalNotes: [],
-    visitHistory: [
-      { date: '10 Aug 2026', doctor: 'drg. SM', treatment: 'Whitening', payment: 'Paid', diagnosis: 'Diskolorasi ekstrinsik', prescription: 'Tidak ada' },
-    ],
-    appointments: [{ reason: 'Whitening Sesi 2', doctor: 'drg. SM', date: '30 Aug 2026' }],
-  },
-  {
-    id: 12, mrn: 'P-0012', name: 'Arif Setiawan', category: 'Regular', gender: 'Laki-laki', age: 48,
-    phone: '0852-2481-7183', address: 'Jl. Kamboja No. 11, Malang',
-    patientType: 'Umum', registeredSince: '02 Feb 2022', lastVisit: '10 Aug 2026', totalVisits: 18,
-    allergies: [], medicalNotes: ['Jantung Koroner'],
-    visitHistory: [
-      { date: '10 Aug 2026', doctor: 'drg. RF', treatment: 'Gigi Patah', payment: 'Paid', diagnosis: 'Fraktur mahkota M1 kanan atas', prescription: 'Asam mefenamat 500mg 3x1' },
-    ],
-    appointments: [],
-  },
-  {
-    id: 13, mrn: 'P-0013', name: 'Hendra Gunawan', category: 'Regular', gender: 'Laki-laki', age: 15,
-    phone: '0852-5737-6191', address: 'Jl. Beringin No. 3, Tangerang Selatan',
-    patientType: 'Umum', registeredSince: '28 Jul 2025', lastVisit: '05 Jul 2026', totalVisits: 3,
-    allergies: [], medicalNotes: [],
-    visitHistory: [
-      { date: '05 Jul 2026', doctor: 'drg. SM', treatment: 'Kontrol Kawat Gigi', payment: 'Paid', diagnosis: 'Kontrol rutin ortodonti', prescription: 'Tidak ada' },
-    ],
-    appointments: [{ reason: 'Kontrol Kawat Gigi', doctor: 'drg. SM', date: '15 Aug 2026' }],
-  },
-  {
-    id: 14, mrn: 'P-0014', name: 'Melati Suryani', category: 'VIP', gender: 'Perempuan', age: 33,
-    phone: '0895-5774-6282', address: 'Jl. Cempaka No. 6, Jakarta Barat',
-    patientType: 'Asuransi Swasta', registeredSince: '09 Oct 2023', lastVisit: '28 Jun 2026', totalVisits: 10,
-    allergies: ['Codein'], medicalNotes: [],
-    visitHistory: [
-      { date: '28 Jun 2026', doctor: 'drg. AN', treatment: 'Cabut Gigi Bungsu', payment: 'Paid', diagnosis: 'Gigi bungsu impaksi total', prescription: 'Amoxicillin 500mg 3x1, Asam mefenamat 500mg 3x1' },
-    ],
-    appointments: [],
-  },
-  {
-    id: 15, mrn: 'P-0015', name: 'Bayu Kusnandar', category: 'Regular', gender: 'Laki-laki', age: 40,
-    phone: '0896-5811-6373', address: 'Jl. Nusa Indah No. 14, Cimahi',
-    patientType: 'BPJS', registeredSince: '16 Jan 2026', lastVisit: '14 Jul 2026', totalVisits: 2,
-    allergies: [], medicalNotes: [],
-    visitHistory: [
-      { date: '14 Jul 2026', doctor: 'drg. RF', treatment: 'Gigi Berlubang', payment: 'Paid', diagnosis: 'Karies dentin M1 kiri bawah', prescription: 'Tidak ada' },
-    ],
-    appointments: [],
-  },
-  {
-    id: 16, mrn: 'P-0016', name: 'Citra Dewanti', category: 'VVIP', gender: 'Perempuan', age: 29,
-    phone: '0812-5848-6464', address: 'Jl. Dahlia No. 20, Jakarta Selatan',
-    patientType: 'Umum', registeredSince: '03 Aug 2026', lastVisit: '03 Aug 2026', totalVisits: 1,
-    allergies: [], medicalNotes: [],
-    visitHistory: [
-      { date: '03 Aug 2026', doctor: 'drg. SM', treatment: 'Whitening', payment: 'Paid', diagnosis: 'Diskolorasi ekstrinsik', prescription: 'Tidak ada' },
-    ],
-    appointments: [{ reason: 'Whitening Sesi 2', doctor: 'drg. SM', date: '22 Aug 2026' }],
-  },
-];
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+// Converts a Supabase `date` column (plain "2026-08-10" string, no time/TZ
+// component) into the short human-readable label used everywhere in this
+// page ("10 Aug 2026") — matching the format the rest of the app already
+// renders (Today's Patient header, patient-detail-sheet's own todayLabel).
+// The literal "T00:00:00" keeps the parse anchored to local midnight rather
+// than UTC midnight, so it can't roll back a day in negative-UTC-offset
+// timezones.
+function formatDisplayDate(isoDate) {
+  if (!isoDate) return null;
+  const parsed = new Date(`${isoDate}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return `${parsed.getDate()} ${MONTH_NAMES[parsed.getMonth()]} ${parsed.getFullYear()}`;
+}
 
 const CATEGORY_FILTERS = ['Semua', 'VVIP', 'VIP', 'Regular'];
 
@@ -241,7 +82,9 @@ const COL_WIDTH = {
 const HEADER_CLASS = 'h-auto whitespace-nowrap bg-[#f0fdf4] px-3 py-4 font-bold text-[#15803d]';
 
 export default function Records() {
-  const [patients, setPatients] = useState(RECORDS_PATIENTS_INITIAL);
+  const [patients, setPatients] = useState([]);
+  const [loadingPatients, setLoadingPatients] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [query, setQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('Semua');
   const [sortBy, setSortBy] = useState('recent');
@@ -256,12 +99,117 @@ export default function Records() {
     setDetailOpen(true);
   }
 
+  // Real roster: patients from Supabase's `patients` table, with each
+  // patient's visit history/last visit/total visits/upcoming appointments
+  // derived from their real rows in `appointments` — replacing the old
+  // fully-mocked RECORDS_PATIENTS_INITIAL array. Split on today's date: any
+  // appointment dated today-or-earlier (and not Cancelled — a cancelled
+  // slot never actually happened) counts as a past visit; anything dated
+  // after today is an upcoming appointment.
+  //
+  // Note: `patients` in Supabase does NOT have a `patientType` column (the
+  // mock data's "Umum/BPJS/Asuransi Swasta" field), and there's no
+  // `clinical_notes` table yet — so diagnosis/prescription/payment per
+  // visit aren't available from the database. Those fields are simply
+  // omitted per visit (PatientDetailSheet already hides rows/badges for
+  // any field that's undefined) rather than fabricated. handleAddClinicalNote
+  // below still only updates local state for the same reason: there's
+  // nowhere in Supabase yet to persist a clinical note.
+  const loadPatients = useCallback(async () => {
+    setLoadingPatients(true);
+    setLoadError(null);
+
+    const { data: patientsData, error: patientsError } = await supabase
+      .from('patients')
+      .select('id, mrn, name, category, gender, age, phone, address, registered_since, allergies, medical_notes')
+      .order('registered_since', { ascending: false });
+
+    if (patientsError) {
+      console.error('Failed to load patients from Supabase', patientsError);
+      setLoadError(patientsError.message);
+      setLoadingPatients(false);
+      toast.error('Gagal memuat data pasien dari database.');
+      return;
+    }
+
+    const patientIds = (patientsData ?? []).map((p) => p.id);
+    const appointmentsByPatient = {};
+
+    if (patientIds.length > 0) {
+      const { data: apptsData, error: apptsError } = await supabase
+        .from('appointments')
+        .select('id, patient_id, appt_date, dokter, keluhan, status')
+        .in('patient_id', patientIds);
+
+      if (apptsError) {
+        // The patient roster itself loaded fine — don't fail the whole page
+        // over visit history, just show it empty and say so.
+        console.error('Failed to load visit history from Supabase', apptsError);
+        toast.error('Data pasien dimuat, tapi riwayat kunjungan gagal dimuat.');
+      } else {
+        for (const appt of apptsData ?? []) {
+          (appointmentsByPatient[appt.patient_id] ??= []).push(appt);
+        }
+      }
+    }
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+
+    const nextPatients = (patientsData ?? []).map((p) => {
+      const appts = appointmentsByPatient[p.id] ?? [];
+      const past = appts
+        .filter((a) => a.appt_date && a.appt_date <= todayStr && a.status !== 'Cancel')
+        .sort((a, b) => (a.appt_date < b.appt_date ? 1 : a.appt_date > b.appt_date ? -1 : 0));
+      const future = appts
+        .filter((a) => a.appt_date && a.appt_date > todayStr)
+        .sort((a, b) => (a.appt_date < b.appt_date ? -1 : a.appt_date > b.appt_date ? 1 : 0));
+
+      return {
+        id: p.id,
+        mrn: p.mrn,
+        name: p.name,
+        category: p.category || 'Regular',
+        gender: p.gender,
+        age: p.age,
+        phone: p.phone,
+        address: p.address,
+        registeredSince: formatDisplayDate(p.registered_since),
+        lastVisit: past[0] ? formatDisplayDate(past[0].appt_date) : null,
+        totalVisits: past.length,
+        allergies: p.allergies ?? [],
+        medicalNotes: p.medical_notes ?? [],
+        visitHistory: past.map((a) => ({
+          date: formatDisplayDate(a.appt_date),
+          doctor: a.dokter && a.dokter !== '-' ? a.dokter : undefined,
+          treatment: a.keluhan && a.keluhan !== '-' ? a.keluhan : undefined,
+        })),
+        appointments: future.map((a) => ({
+          reason: a.keluhan && a.keluhan !== '-' ? a.keluhan : 'Appointment',
+          doctor: a.dokter && a.dokter !== '-' ? a.dokter : undefined,
+          date: formatDisplayDate(a.appt_date),
+        })),
+      };
+    });
+
+    setPatients(nextPatients);
+    setLoadingPatients(false);
+  }, []);
+
+  useEffect(() => {
+    loadPatients();
+  }, [loadPatients]);
+
   // Lets a Doctor append a new clinical note (diagnosis + prescription) to
   // a patient's visit history directly from the Clinical tab — the tab was
   // previously read-only, which meant "Rekam Medis" could show past visits
   // but a doctor had no way to actually record today's. New entries are
   // unshifted to the front so the most recent note always shows first,
   // matching how visitHistory is already ordered everywhere else.
+  //
+  // Still local-state-only, same as before this page was connected to
+  // Supabase: there's no `clinical_notes` table yet to persist this to, so
+  // a saved note (unlike the rest of this page's data) won't survive a
+  // refresh or show up in another browser.
   function handleAddClinicalNote(patientId, note) {
     setPatients((prev) =>
       prev.map((p) =>
@@ -281,7 +229,7 @@ export default function Records() {
         !trimmed ||
         p.name.toLowerCase().includes(trimmed) ||
         p.mrn.toLowerCase().includes(trimmed) ||
-        p.phone.replace(/-/g, '').includes(trimmed.replace(/-/g, ''));
+        (p.phone ?? '').replace(/-/g, '').includes(trimmed.replace(/-/g, ''));
       const matchesCategory = categoryFilter === 'Semua' || p.category === categoryFilter;
       return matchesQuery && matchesCategory;
     });
@@ -304,9 +252,10 @@ export default function Records() {
     const priorityList = patients.filter((p) => p.category !== 'Regular').sort(
       (a, b) => parseDisplayDate(b.registeredSince) - parseDisplayDate(a.registeredSince)
     );
+    const now = new Date();
     const newThisMonthList = patients.filter((p) => {
       const d = new Date(p.registeredSince);
-      return d.getFullYear() === 2026 && d.getMonth() === 7; // August 2026
+      return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
     });
     const avgVisits = total
       ? (patients.reduce((sum, p) => sum + p.totalVisits, 0) / total).toFixed(1)
@@ -544,11 +493,12 @@ export default function Records() {
                         </div>
                       </TableCell>
                       <TableCell className="!align-middle py-3 text-left text-[#334155]">
-                        {patient.age} Thn &middot; {patient.gender === 'Laki-laki' ? 'L' : 'P'}
+                        {patient.age != null ? `${patient.age} Thn` : '-'} &middot;{' '}
+                        {patient.gender === 'Laki-laki' ? 'L' : patient.gender === 'Perempuan' ? 'P' : '-'}
                       </TableCell>
-                      <TableCell className="!align-middle py-3 text-left text-[#334155]">{patient.phone}</TableCell>
-                      <TableCell className="!align-middle py-3 text-left text-[#334155]">{patient.registeredSince}</TableCell>
-                      <TableCell className="!align-middle py-3 text-left text-[#334155]">{patient.lastVisit}</TableCell>
+                      <TableCell className="!align-middle py-3 text-left text-[#334155]">{patient.phone || '-'}</TableCell>
+                      <TableCell className="!align-middle py-3 text-left text-[#334155]">{patient.registeredSince || '-'}</TableCell>
+                      <TableCell className="!align-middle py-3 text-left text-[#334155]">{patient.lastVisit || '-'}</TableCell>
                       <TableCell className="!align-middle py-3 text-left text-[#334155]">{patient.totalVisits}x</TableCell>
                       <TableCell className="!align-middle py-3 text-left">
                         <button
@@ -565,7 +515,11 @@ export default function Records() {
                   {visiblePatients.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={9} className="h-16 text-left text-[#64748b]">
-                        Tidak ada pasien yang cocok dengan pencarian/filter ini.
+                        {loadingPatients
+                          ? 'Memuat data pasien...'
+                          : loadError
+                            ? `Gagal memuat data pasien: ${loadError}`
+                            : 'Tidak ada pasien yang cocok dengan pencarian/filter ini.'}
                       </TableCell>
                     </TableRow>
                   )}
