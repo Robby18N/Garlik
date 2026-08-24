@@ -115,8 +115,15 @@ export default function Records() {
   // any field that's undefined) rather than fabricated. handleAddClinicalNote
   // below still only updates local state for the same reason: there's
   // nowhere in Supabase yet to persist a clinical note.
-  const loadPatients = useCallback(async () => {
-    setLoadingPatients(true);
+  // `silent` skips the loading-spinner reset — used for the Realtime-
+  // triggered background refreshes below, so a new appointment coming in
+  // from another tab/browser updates the table in place instead of
+  // flashing it back to "Memuat data pasien..." while a receptionist is
+  // mid-search or has a detail sheet open.
+  const loadPatients = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) {
+      setLoadingPatients(true);
+    }
     setLoadError(null);
 
     const { data: patientsData, error: patientsError } = await supabase
@@ -197,6 +204,42 @@ export default function Records() {
 
   useEffect(() => {
     loadPatients();
+  }, [loadPatients]);
+
+  // Keeps the roster live without a manual refresh: a new registration or
+  // appointment booked anywhere else (another tab, another browser, the
+  // Today's Patient page) pushes a Postgres change event here, and the
+  // whole list is silently recomputed from Supabase. Without this, Records
+  // only reflects the database as of whenever this page happened to mount
+  // — which is exactly what made it look "out of sync" with Today's
+  // Patient right after booking a same-day appointment for someone whose
+  // Records tab was already open. Debounced by 300ms so a registration
+  // (an insert into `patients` immediately followed by one into
+  // `appointments`) triggers one reload, not two back-to-back.
+  //
+  // Requires `patients` and `appointments` to be added to Supabase's
+  // realtime publication (same migration `remarks` needed earlier):
+  //   alter publication supabase_realtime add table patients;
+  //   alter publication supabase_realtime add table appointments;
+  // If either was already added (e.g. `appointments` for some other
+  // feature), Postgres will just say so — safe to ignore.
+  useEffect(() => {
+    let debounceTimer = null;
+    const scheduleReload = () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => loadPatients({ silent: true }), 300);
+    };
+
+    const channel = supabase
+      .channel('records-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'patients' }, scheduleReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments' }, scheduleReload)
+      .subscribe();
+
+    return () => {
+      clearTimeout(debounceTimer);
+      supabase.removeChannel(channel);
+    };
   }, [loadPatients]);
 
   // Lets a Doctor append a new clinical note (diagnosis + prescription) to
