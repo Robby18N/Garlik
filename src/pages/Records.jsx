@@ -25,24 +25,9 @@ import PatientDetailSheet from '@/components/patient-detail-sheet';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
+import { formatDisplayDate, summarizeVisits } from '@/lib/patients';
 
 const CATEGORY_DOT = { VVIP: 'bg-amber-500', VIP: 'bg-green-500', Regular: 'bg-slate-400' };
-
-const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-// Converts a Supabase `date` column (plain "2026-08-10" string, no time/TZ
-// component) into the short human-readable label used everywhere in this
-// page ("10 Aug 2026") — matching the format the rest of the app already
-// renders (Today's Patient header, patient-detail-sheet's own todayLabel).
-// The literal "T00:00:00" keeps the parse anchored to local midnight rather
-// than UTC midnight, so it can't roll back a day in negative-UTC-offset
-// timezones.
-function formatDisplayDate(isoDate) {
-  if (!isoDate) return null;
-  const parsed = new Date(`${isoDate}T00:00:00`);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return `${parsed.getDate()} ${MONTH_NAMES[parsed.getMonth()]} ${parsed.getFullYear()}`;
-}
 
 const CATEGORY_FILTERS = ['Semua', 'VVIP', 'VIP', 'Regular'];
 
@@ -160,16 +145,13 @@ export default function Records() {
       }
     }
 
-    const todayStr = new Date().toISOString().slice(0, 10);
-
+    // summarizeVisits (lib/patients.js) is the single shared place that
+    // decides what counts as a past visit vs. an upcoming appointment —
+    // also used by fetchPatientVisits (Today's Patient's Detail Pasien
+    // sheet) and fetchLastVisit (the search popup), so all three surfaces
+    // agree instead of quietly drifting apart.
     const nextPatients = (patientsData ?? []).map((p) => {
-      const appts = appointmentsByPatient[p.id] ?? [];
-      const past = appts
-        .filter((a) => a.appt_date && a.appt_date <= todayStr && a.status !== 'Cancel')
-        .sort((a, b) => (a.appt_date < b.appt_date ? 1 : a.appt_date > b.appt_date ? -1 : 0));
-      const future = appts
-        .filter((a) => a.appt_date && a.appt_date > todayStr)
-        .sort((a, b) => (a.appt_date < b.appt_date ? -1 : a.appt_date > b.appt_date ? 1 : 0));
+      const visits = summarizeVisits(appointmentsByPatient[p.id] ?? []);
 
       return {
         id: p.id,
@@ -181,20 +163,9 @@ export default function Records() {
         phone: p.phone,
         address: p.address,
         registeredSince: formatDisplayDate(p.registered_since),
-        lastVisit: past[0] ? formatDisplayDate(past[0].appt_date) : null,
-        totalVisits: past.length,
         allergies: p.allergies ?? [],
         medicalNotes: p.medical_notes ?? [],
-        visitHistory: past.map((a) => ({
-          date: formatDisplayDate(a.appt_date),
-          doctor: a.dokter && a.dokter !== '-' ? a.dokter : undefined,
-          treatment: a.keluhan && a.keluhan !== '-' ? a.keluhan : undefined,
-        })),
-        appointments: future.map((a) => ({
-          reason: a.keluhan && a.keluhan !== '-' ? a.keluhan : 'Appointment',
-          doctor: a.dokter && a.dokter !== '-' ? a.dokter : undefined,
-          date: formatDisplayDate(a.appt_date),
-        })),
+        ...visits,
       };
     });
 

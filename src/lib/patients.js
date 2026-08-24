@@ -40,32 +40,70 @@ export function formatDisplayDate(isoDate) {
   return `${parsed.getDate()} ${MONTH_NAMES[parsed.getMonth()]} ${parsed.getFullYear()}`;
 }
 
-// Finds a patient's most recent genuine past visit (an appointment dated
+// Single source of truth for "what counts as a real visit", given one
+// patient's raw appointment rows (any order): an appointment dated
 // today-or-earlier that wasn't Cancelled — a cancelled slot never actually
-// happened) — used by PatientFoundDialog ("Patient search results") to
-// give the receptionist/doctor a quick heads-up on this patient's history
-// before booking a new appointment for them. Returns null when the patient
-// has no real visit on record yet.
-export async function fetchLastVisit(patientId) {
-  const { data, error } = await supabase
-    .from('appointments')
-    .select('appt_date, keluhan, status')
-    .eq('patient_id', patientId)
-    .order('appt_date', { ascending: false });
-
-  if (error) {
-    console.error('Failed to load last visit for patient', patientId, error);
-    return null;
-  }
-
+// happened — is a past visit; anything dated after today is an upcoming
+// appointment. Pure/sync (no fetching) so it can be reused both by code
+// that already has the rows in hand (Records.jsx bulk-fetches once for
+// every patient at once) and by fetchPatientVisits below (fetches one
+// patient at a time). Before this was pulled out, PatientFoundDialog's
+// last-visit line, Records' History tab, and Today's Patient's own Detail
+// Pasien sheet each risked re-deriving this slightly differently — exactly
+// what happened when Today's Patient's sheet was never wired up at all and
+// silently showed "No visit history available" for everyone.
+export function summarizeVisits(appointmentRows) {
   const todayStr = new Date().toISOString().slice(0, 10);
-  const lastReal = (data ?? []).find(
-    (a) => a.appt_date && a.appt_date <= todayStr && a.status !== 'Cancel'
-  );
-  if (!lastReal) return null;
+  const past = (appointmentRows ?? [])
+    .filter((a) => a.appt_date && a.appt_date <= todayStr && a.status !== 'Cancel')
+    .sort((a, b) => (a.appt_date < b.appt_date ? 1 : a.appt_date > b.appt_date ? -1 : 0));
+  const future = (appointmentRows ?? [])
+    .filter((a) => a.appt_date && a.appt_date > todayStr)
+    .sort((a, b) => (a.appt_date < b.appt_date ? -1 : a.appt_date > b.appt_date ? 1 : 0));
 
   return {
-    date: formatDisplayDate(lastReal.appt_date),
-    treatment: lastReal.keluhan && lastReal.keluhan !== '-' ? lastReal.keluhan : null,
+    visitHistory: past.map((a) => ({
+      date: formatDisplayDate(a.appt_date),
+      doctor: a.dokter && a.dokter !== '-' ? a.dokter : undefined,
+      treatment: a.keluhan && a.keluhan !== '-' ? a.keluhan : undefined,
+    })),
+    lastVisit: past[0] ? formatDisplayDate(past[0].appt_date) : null,
+    totalVisits: past.length,
+    appointments: future.map((a) => ({
+      reason: a.keluhan && a.keluhan !== '-' ? a.keluhan : 'Appointment',
+      doctor: a.dokter && a.dokter !== '-' ? a.dokter : undefined,
+      date: formatDisplayDate(a.appt_date),
+    })),
   };
+}
+
+// Fetches one patient's full visit picture (visitHistory, lastVisit,
+// totalVisits, upcoming appointments) — used by Today's Patient's Detail
+// Pasien sheet (handleViewPatient in TodaysPatient.jsx), fetched on demand
+// for just the one patient being viewed rather than bulk-loading every
+// patient's history up front like Records.jsx does.
+export async function fetchPatientVisits(patientId) {
+  const { data, error } = await supabase
+    .from('appointments')
+    .select('appt_date, dokter, keluhan, status')
+    .eq('patient_id', patientId);
+
+  if (error) {
+    console.error('Failed to load visit history for patient', patientId, error);
+    return { visitHistory: [], lastVisit: null, totalVisits: 0, appointments: [] };
+  }
+
+  return summarizeVisits(data);
+}
+
+// Finds a patient's most recent genuine past visit — used by
+// PatientFoundDialog ("Patient search results") to give the
+// receptionist/doctor a quick heads-up on this patient's history before
+// booking a new appointment for them. Returns null when the patient has no
+// real visit on record yet. A thin wrapper over fetchPatientVisits so this
+// and the Detail Pasien sheet can never disagree on what counts as "last".
+export async function fetchLastVisit(patientId) {
+  const { visitHistory } = await fetchPatientVisits(patientId);
+  const last = visitHistory[0];
+  return last ? { date: last.date, treatment: last.treatment ?? null } : null;
 }

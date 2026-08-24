@@ -61,7 +61,7 @@ import { useRole } from '@/context/role-context';
 import { usePatientStatus } from '@/context/patient-status-context';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
-import { escapeIlike, fetchLastVisit } from '@/lib/patients';
+import { escapeIlike, fetchLastVisit, fetchPatientVisits } from '@/lib/patients';
 import { computeWaitEstimates, isWaitingStatus } from '@/lib/wait-estimate';
 
 const STATUS_STYLES = {
@@ -786,9 +786,52 @@ export default function TodaysPatient() {
     return { room: patient.room, lab: patient.lab };
   }
 
-  function handleViewPatient(patient) {
+  // Opens the shared Detail Pasien sheet (same component Records.jsx uses)
+  // for a row from today's/tomorrow's table. That row (`mapped` in
+  // loadAppointments above) only carries appointment-scoped fields — it has
+  // no visitHistory/lastVisit/totalVisits/allergies/medicalNotes/age/
+  // gender/address at all, which is exactly why this sheet used to show
+  // "No visit history available" for every patient regardless of their
+  // real history: PatientDetailSheet was never wrong, it was just never
+  // handed the data. The sheet opens immediately with what's already on
+  // hand (name/mrn/category/phone), then the patient's real demographic
+  // fields and visit history are fetched by their actual patient id
+  // (`patientId` — NOT `id`, which is this row's *appointment* id) and
+  // merged in once they resolve, same progressive-fill pattern as the
+  // "Patient search results" popup's last-visit line.
+  async function handleViewPatient(patient) {
     setSelectedPatient(patient);
     setDetailOpen(true);
+
+    if (!patient.patientId) return;
+
+    const [detailsResult, visits] = await Promise.all([
+      supabase
+        .from('patients')
+        .select('gender, age, address, allergies, medical_notes')
+        .eq('id', patient.patientId)
+        .single(),
+      fetchPatientVisits(patient.patientId),
+    ]);
+
+    const { data: details, error: detailsError } = detailsResult;
+    if (detailsError) {
+      console.error('Failed to load patient demographic details', detailsError);
+    }
+
+    setSelectedPatient((prev) =>
+      prev && prev.id === patient.id
+        ? {
+            ...prev,
+            gender: details?.gender ?? prev.gender,
+            age: details?.age ?? prev.age,
+            address: details?.address ?? prev.address,
+            allergies: details?.allergies ?? [],
+            medicalNotes: details?.medical_notes ?? [],
+            ...visits,
+          }
+        : prev
+    );
   }
 
   // The day's full roster before any search/name filtering — scoped down to
