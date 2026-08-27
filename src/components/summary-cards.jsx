@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { NotebookPen, UsersRound, Users, Plus, X } from 'lucide-react';
+import { NotebookPen, UsersRound, Users, Stethoscope, Plus, X } from 'lucide-react';
 
 import {
   Dialog,
@@ -19,6 +19,11 @@ import {
 import { cn } from '@/lib/utils';
 import { StatCard, DetailHighlightToggle } from '@/components/stat-card';
 import { isWaitingStatus } from '@/lib/wait-estimate';
+// The clinic's fixed roster of doctors — same source Registration.jsx's
+// appointment-doctor picker and the login screen's account list use, so
+// "Doctor Available" can never list a doctor that doesn't actually exist
+// in the system (or miss one that does).
+import { DOCTORS } from '@/context/role-context';
 
 // Mock data matching the Figma "Summary show & hide" component exactly
 // (Show state: node 583:4311, Hide state: node 583:4583).
@@ -43,12 +48,47 @@ const STATUS_BUCKETS = [
   { label: 'Cancel', dot: 'bg-red-500', match: (s) => s === 'Cancel' },
 ];
 
+// The clinic's operating window used to work out each doctor's *free*
+// gaps today (08:00-17:00) — appointments in this app have never been
+// seen outside that range, and there's no "clinic hours" setting anywhere
+// else in the app to read this from instead.
+const CLINIC_OPEN_MIN = 8 * 60;
+const CLINIC_CLOSE_MIN = 17 * 60;
+
+// appt_time is stored as a plain "HH:MM" string — converts it to minutes
+// since midnight so busy/free ranges can be compared and merged as plain
+// numbers instead of juggling string comparisons.
+function parseTimeToMinutes(hhmm) {
+  if (!hhmm || typeof hhmm !== 'string' || !hhmm.includes(':')) return null;
+  const [h, m] = hhmm.split(':').map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return null;
+  return h * 60 + m;
+}
+
+// durasi is a free-form label like "30 Min" (or "-" for the register-only
+// fast-track in Registration.jsx, which never got a real appointment
+// length). Pulls out the leading number, falling back to a conservative
+// 30-minute default when there isn't one, so a missing/placeholder
+// duration still blocks *some* time instead of collapsing to a zero-
+// length (and therefore invisible) busy slot.
+function parseDurationMinutes(durasi) {
+  const match = typeof durasi === 'string' ? durasi.match(/\d+/) : null;
+  return match ? Number(match[0]) : 30;
+}
+
+function formatMinutes(mins) {
+  const h = String(Math.floor(mins / 60)).padStart(2, '0');
+  const m = String(mins % 60).padStart(2, '0');
+  return `${h}:${m}`;
+}
+
 /**
- * Top-of-dashboard summary section: three stat cards (Sticky notes,
- * Waiting list, Status Patient) plus a "Show/Hide Detail Highlight"
- * toggle that expands each card in place to reveal its breakdown.
- * Matches Figma nodes 583:4311 (Show/collapsed) and 583:4583
- * (Hide/expanded), redrawn with a flatter, more minimal visual style.
+ * Top-of-dashboard summary section: four stat cards (Sticky notes,
+ * Waiting list, Status Patient, Doctor Available) plus a "Show/Hide Detail
+ * Highlight" toggle that expands each card in place to reveal its
+ * breakdown. The first three match Figma nodes 583:4311 (Show/collapsed)
+ * and 583:4583 (Hide/expanded), redrawn with a flatter, more minimal
+ * visual style; Doctor Available adds the same row's node 719:2071.
  *
  * Each card is a real accordion (height animates from its collapsed row
  * to its measured content height and back), so both expanding *and*
@@ -134,6 +174,74 @@ export default function SummaryCards({ patients, doctorScoped = false }) {
       })),
     [roster]
   );
+
+  // One schedule per clinic doctor (not just the doctors who happen to
+  // appear in `roster` today — a doctor with zero bookings still needs to
+  // show up as fully available), built straight from `roster`'s own
+  // `dokter`/`appt`/`durasi`/`status` fields. This is the live connection
+  // to the Today's Patient table the card is meant to reflect: a new
+  // booking, a cancellation, or a duration change on that table changes
+  // what this card shows on the very next render, with no separate data
+  // source of its own.
+  const doctorSchedules = useMemo(() => {
+    const nowMin = (() => {
+      const now = new Date();
+      return now.getHours() * 60 + now.getMinutes();
+    })();
+
+    return DOCTORS.map((doctor) => {
+      // A cancelled slot never actually happens — same "what counts as a
+      // real visit" rule lib/patients.js's summarizeVisits uses for a
+      // patient's history — so it doesn't block the doctor's time here
+      // either. Every other status (including a past "Complete" one)
+      // still reflects a real slot on today's schedule.
+      const rawBusy = roster
+        .filter((p) => p.dokter === doctor && p.status !== 'Cancel')
+        .map((p) => {
+          const start = parseTimeToMinutes(p.appt);
+          if (start == null) return null;
+          const end = start + parseDurationMinutes(p.durasi);
+          return { start, end };
+        })
+        .filter(Boolean)
+        .sort((a, b) => a.start - b.start);
+
+      // Merge overlapping/back-to-back bookings into one continuous block
+      // — otherwise two appointments booked back-to-back would render as
+      // separate chips with an artificial (and wrong) 0-minute "free" gap
+      // between them.
+      const busy = [];
+      for (const slot of rawBusy) {
+        const last = busy[busy.length - 1];
+        if (last && slot.start <= last.end) {
+          last.end = Math.max(last.end, slot.end);
+        } else {
+          busy.push({ ...slot });
+        }
+      }
+
+      // Free = the complement of `busy` inside today's clinic hours.
+      const free = [];
+      let cursor = CLINIC_OPEN_MIN;
+      for (const slot of busy) {
+        const start = Math.max(slot.start, CLINIC_OPEN_MIN);
+        if (start > cursor) free.push({ start: cursor, end: Math.min(start, CLINIC_CLOSE_MIN) });
+        cursor = Math.max(cursor, Math.min(slot.end, CLINIC_CLOSE_MIN));
+      }
+      if (cursor < CLINIC_CLOSE_MIN) free.push({ start: cursor, end: CLINIC_CLOSE_MIN });
+
+      const isAvailableNow = !busy.some((slot) => nowMin >= slot.start && nowMin < slot.end);
+
+      return { doctor, busy, free, isAvailableNow };
+    });
+  }, [roster]);
+
+  // Collapsed-state count: how many of the clinic's doctors are free at
+  // this exact moment — the number a receptionist glancing at the row of
+  // cards actually wants ("can I book someone in right now"), same idea
+  // as "Waiting list"'s count being how many patients are waiting right
+  // now rather than some other total.
+  const doctorsAvailableNow = doctorSchedules.filter((d) => d.isAvailableNow).length;
 
   return (
     <div className="flex w-full flex-col gap-3">
@@ -256,6 +364,71 @@ export default function SummaryCards({ patients, doctorScoped = false }) {
                 <div className="flex items-center gap-1">
                   <span className={cn('size-1.5 rounded-full', item.dot)} />
                   <span className="text-[11px] font-medium text-slate-500">{item.label}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </StatCard>
+
+        {/* Doctor Available — per Figma node 719:2071. Count is how many
+            of the clinic's doctors are free right now; expanding the row
+            breaks that down per doctor into the actual hours they're
+            already booked ("Appointment") vs. still open ("Available"),
+            both derived live from `roster` (Today's Patient's real
+            table), not a separate schedule of their own. */}
+        <StatCard
+          icon={<Stethoscope className="size-4" />}
+          title="Doctor Available"
+          count={doctorsAvailableNow}
+          showDetail={showDetail}
+        >
+          <div className="flex flex-col gap-1.5 overflow-y-auto">
+            {doctorSchedules.map((d) => (
+              <div
+                key={d.doctor}
+                className="rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-1.5"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-medium text-slate-700">{d.doctor}</span>
+                  <span
+                    className={cn(
+                      'flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold',
+                      d.isAvailableNow ? 'bg-green-50 text-green-600' : 'bg-orange-50 text-orange-600'
+                    )}
+                  >
+                    <span className={cn('size-1.5 rounded-full', d.isAvailableNow ? 'bg-green-500' : 'bg-orange-500')} />
+                    {d.isAvailableNow ? 'Available now' : 'In appointment'}
+                  </span>
+                </div>
+                <div className="mt-1 flex flex-wrap items-center gap-1">
+                  <span className="text-[10px] font-semibold text-slate-400">Appt</span>
+                  {d.busy.length === 0 ? (
+                    <span className="text-[11px] text-slate-400">—</span>
+                  ) : (
+                    d.busy.map((slot, i) => (
+                      <span
+                        key={i}
+                        className="rounded-full bg-white px-1.5 py-0.5 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200"
+                      >
+                        {formatMinutes(slot.start)}–{formatMinutes(slot.end)}
+                      </span>
+                    ))
+                  )}
+                </div>
+                <div className="mt-1 flex flex-wrap items-center gap-1">
+                  <span className="text-[10px] font-semibold text-slate-400">Bebas</span>
+                  {d.free.length === 0 ? (
+                    <span className="text-[11px] text-slate-400">—</span>
+                  ) : (
+                    d.free.map((slot, i) => (
+                      <span
+                        key={i}
+                        className="rounded-full bg-green-50 px-1.5 py-0.5 text-[11px] font-medium text-green-700 ring-1 ring-green-100"
+                      >
+                        {formatMinutes(slot.start)}–{formatMinutes(slot.end)}
+                      </span>
+                    ))
+                  )}
                 </div>
               </div>
             ))}
