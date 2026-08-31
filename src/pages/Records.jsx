@@ -37,25 +37,35 @@ const SORT_OPTIONS = [
   { value: 'visits', label: 'Kunjungan Terbanyak' },
 ];
 
-// Filters the roster by when a patient registered ("Terdaftar Sejak") —
-// same field the "Pasien Baru Bulan Ini" stat card above already keys off
-// of, just exposed here as a filter the receptionist can apply to the
-// whole table instead of only seeing the count.
+// Filters the roster by actual VISIT history (per-patient `visitHistory`,
+// from summarizeVisits in lib/patients.js — the same "appointment dated
+// today-or-earlier and not Cancelled" definition already used for this
+// page's own "Kunjungan Terakhir"/"Total Kunjungan" columns, and for the
+// Detail Pasien sheet's history tab). This is deliberately NOT based on
+// "Terdaftar Sejak" (registration date) — a first-time registration is
+// rare, but a patient coming in for an exam/service happens every day, and
+// that's what "pasien yang berkunjung hari ini/bulan ini" actually means.
+// A patient can match more than one visit in `visitHistory`, so this
+// checks whether ANY of their past visits falls in the selected period,
+// not just their single most recent one.
 const PERIOD_FILTERS = [
   { value: 'semua', label: 'Semua Waktu' },
-  { value: 'harian', label: 'Harian (Hari Ini)' },
-  { value: 'bulanan', label: 'Bulanan (Bulan Ini)' },
+  { value: 'harian', label: 'Kunjungan Hari Ini' },
+  { value: 'bulanan', label: 'Kunjungan Bulan Ini' },
 ];
 
-function matchesPeriod(registeredSince, period) {
+function matchesVisitPeriod(visitHistory, period) {
   if (period === 'semua') return true;
-  const d = new Date(registeredSince);
-  if (Number.isNaN(d.getTime())) return false;
+  if (!visitHistory || visitHistory.length === 0) return false;
   const now = new Date();
-  const sameMonth = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
-  if (period === 'bulanan') return sameMonth;
-  if (period === 'harian') return sameMonth && d.getDate() === now.getDate();
-  return true;
+  return visitHistory.some((visit) => {
+    const d = new Date(visit.date);
+    if (Number.isNaN(d.getTime())) return false;
+    const sameMonth = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+    if (period === 'bulanan') return sameMonth;
+    if (period === 'harian') return sameMonth && d.getDate() === now.getDate();
+    return true;
+  });
 }
 
 const CATEGORY_BADGE = {
@@ -267,7 +277,7 @@ export default function Records() {
         p.mrn.toLowerCase().includes(trimmed) ||
         (p.phone ?? '').replace(/-/g, '').includes(trimmed.replace(/-/g, ''));
       const matchesCategory = categoryFilter === 'Semua' || p.category === categoryFilter;
-      const matchesPeriodFilter = matchesPeriod(p.registeredSince, periodFilter);
+      const matchesPeriodFilter = matchesVisitPeriod(p.visitHistory, periodFilter);
       return matchesQuery && matchesCategory && matchesPeriodFilter;
     });
 
@@ -477,8 +487,9 @@ export default function Records() {
                   </SelectContent>
                 </Select>
 
-                {/* Filters the roster by "Terdaftar Sejak" (registration date) —
-                    Harian = terdaftar hari ini, Bulanan = terdaftar bulan ini. */}
+                {/* Filters the roster by visit history — Harian = punya kunjungan/
+                    pemeriksaan hari ini, Bulanan = punya kunjungan bulan ini.
+                    See matchesVisitPeriod above for what counts as a "visit". */}
                 <Select value={periodFilter} onValueChange={setPeriodFilter}>
                   <SelectTrigger className="h-10 rounded-3xl border-[#e2e8f0] px-4 text-sm shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)]">
                     <SelectValue placeholder="Periode" />
