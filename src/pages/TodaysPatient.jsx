@@ -54,7 +54,8 @@ import PatientFoundDialog from '@/components/patient-found-dialog';
 import MakeAppointmentDialog from '@/components/make-appointment-dialog';
 import EditAppointmentDialog from '@/components/edit-appointment-dialog';
 import SettingRoomLabDialog from '@/components/setting-room-lab-dialog';
-import MrCheckIcon, { medicalRiskDescription } from '@/components/mr-check-icon';
+import MrCheckIcon from '@/components/mr-check-icon';
+import { MrHoverCard } from '@/components/mr-hover-card';
 import TodaysPatientSkeleton from '@/components/todays-patient-skeleton';
 import roomsLabsIcon from '@/assets/rooms-labs-icon.png';
 import { useRole } from '@/context/role-context';
@@ -1317,11 +1318,10 @@ export default function TodaysPatient() {
                     >
                       <TableCell className="!align-middle px-3 py-3 text-left text-[#334155]">{index + 1}</TableCell>
                       <TableCell className="!align-middle px-3 py-3 text-left">
-                        <div
-                          className="flex items-center justify-start"
-                          title={medicalRiskDescription(patient.medicalRiskLevel)}
-                        >
-                          <MrCheckIcon variant={patient.medicalRiskLevel} />
+                        <div className="flex items-center justify-start">
+                          <MrHoverCard variant={patient.medicalRiskLevel}>
+                            <MrCheckIcon variant={patient.medicalRiskLevel} />
+                          </MrHoverCard>
                         </div>
                       </TableCell>
                       <TableCell className="!align-middle px-3 py-3 text-left text-[#334155]">{patient.appt}</TableCell>
