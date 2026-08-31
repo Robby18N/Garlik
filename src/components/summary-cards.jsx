@@ -39,6 +39,8 @@ import { DOCTORS } from '@/context/role-context';
 //   );
 //   create index if not exists waiting_list_note_date_idx on waiting_list (note_date);
 // Without it, loading or adding to either list fails outright.
+// (Screening's persistence migration lives in src/pages/Screening.jsx —
+// same idea, separate `screenings` table, run once alongside this one.)
 function getTodayDateStr() {
   return new Date().toISOString().slice(0, 10);
 }

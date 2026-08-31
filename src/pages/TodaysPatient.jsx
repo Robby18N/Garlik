@@ -56,6 +56,7 @@ import EditAppointmentDialog from '@/components/edit-appointment-dialog';
 import SettingRoomLabDialog from '@/components/setting-room-lab-dialog';
 import MrCheckIcon from '@/components/mr-check-icon';
 import { MrHoverCard } from '@/components/mr-hover-card';
+import { ScreeningStatusCell } from '@/components/screening-status-cell';
 import TodaysPatientSkeleton from '@/components/todays-patient-skeleton';
 import roomsLabsIcon from '@/assets/rooms-labs-icon.png';
 import { useRole } from '@/context/role-context';
@@ -112,11 +113,19 @@ const STATUS_STYLES = {
 const COL_WIDTH = {
   no: 'w-[3.25%]',
   mr: 'w-[3.55%]',
+  // Same width as `mr` — same kind of at-a-glance icon+hover-tooltip cell
+  // (see screening-status-cell.jsx), just for the Screening page's result
+  // instead of a Doctor's medical-risk assessment. Taken out of `keluhan`
+  // below rather than shrinking `name`/other columns, since `keluhan`
+  // already wraps its text (`whitespace-normal`) instead of truncating —
+  // losing a little width there just means occasional extra wrapped
+  // lines, not clipped/unreadable content.
+  skrining: 'w-[3.55%]',
   appt: 'w-[6.04%]',
   name: 'w-[13.58%]',
   dokter: 'w-[6.04%]',
   room: 'w-[6.04%]',
-  keluhan: 'w-[12.08%]',
+  keluhan: 'w-[8.53%]',
   durasi: 'w-[6.04%]',
   status: 'w-[140px]',
   lab: 'w-[3.77%]',
@@ -511,6 +520,11 @@ export default function TodaysPatient() {
         phone: row.patients?.phone ?? '',
         mrn: row.patients?.mrn ?? null,
         startedAt: row.started_at,
+        // Filled in below, once the `screenings` rows for these
+        // appointment ids come back — see the Skrining column's
+        // ScreeningStatusCell. null here (not yet screened) is a real,
+        // displayable state, not a loading placeholder.
+        screening: null,
       };
       nextThreads[row.id] =
         row.remark && row.remark !== '-'
@@ -547,6 +561,32 @@ export default function TodaysPatient() {
             time: nowTimeLabel(new Date(r.created_at)),
           };
           nextThreads[r.appointment_id] = [...(nextThreads[r.appointment_id] ?? []), message];
+        }
+      }
+
+      // The other end of the Screening page (src/pages/Screening.jsx) —
+      // once a receptionist finishes a patient's initial screening there,
+      // it lands in this `screenings` table and shows up here as the
+      // Skrining column's icon+tooltip (screening-status-cell.jsx), so a
+      // Doctor sees it without opening a separate menu. Also non-fatal:
+      // the table still loads, the column just falls back to "Belum
+      // Skrining" for everyone until the next successful load. Requires
+      // the one-time migration documented at the top of Screening.jsx.
+      const { data: screeningsData, error: screeningsError } = await supabase
+        .from('screenings')
+        .select(
+          'appointment_id, suhu, tensi, berat, tinggi, conditions, notes, screened_at, screened_by, duration_min'
+        )
+        .in('appointment_id', apptIds);
+
+      if (screeningsError) {
+        console.error('Failed to load screening results', screeningsError);
+      } else {
+        const screeningsByApptId = Object.fromEntries(
+          (screeningsData ?? []).map((s) => [s.appointment_id, s])
+        );
+        for (const p of [...nextToday, ...nextTomorrow]) {
+          p.screening = screeningsByApptId[p.id] ?? null;
         }
       }
     }
@@ -1241,6 +1281,12 @@ export default function TodaysPatient() {
                   <TableRow className="border-transparent hover:bg-transparent">
                     <TableHead className={cn(HEADER_CLASS, COL_WIDTH.no, 'text-left')}>No</TableHead>
                     <TableHead className={cn(HEADER_CLASS, COL_WIDTH.mr, 'text-left')}>MR</TableHead>
+                    {/* "Skr" (not the full "Skrining") for the same reason "MR" next to it is
+                        abbreviated — the column is only wide enough for a couple of characters
+                        before the header text visibly runs into the "Appt" header beside it
+                        (whitespace-nowrap headers overflow rather than wrap). The hover tooltip
+                        spells the full meaning out, same as MR's icon does. */}
+                    <TableHead className={cn(HEADER_CLASS, COL_WIDTH.skrining, 'text-left')}>Skr</TableHead>
                     <TableHead className={cn(HEADER_CLASS, COL_WIDTH.appt)}>
                       <button
                         type="button"
@@ -1322,6 +1368,11 @@ export default function TodaysPatient() {
                           <MrHoverCard variant={patient.medicalRiskLevel}>
                             <MrCheckIcon variant={patient.medicalRiskLevel} />
                           </MrHoverCard>
+                        </div>
+                      </TableCell>
+                      <TableCell className="!align-middle px-3 py-3 text-left">
+                        <div className="flex items-center justify-start">
+                          <ScreeningStatusCell screening={patient.screening} />
                         </div>
                       </TableCell>
                       <TableCell className="!align-middle px-3 py-3 text-left text-[#334155]">{patient.appt}</TableCell>
