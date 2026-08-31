@@ -37,6 +37,27 @@ const SORT_OPTIONS = [
   { value: 'visits', label: 'Kunjungan Terbanyak' },
 ];
 
+// Filters the roster by when a patient registered ("Terdaftar Sejak") —
+// same field the "Pasien Baru Bulan Ini" stat card above already keys off
+// of, just exposed here as a filter the receptionist can apply to the
+// whole table instead of only seeing the count.
+const PERIOD_FILTERS = [
+  { value: 'semua', label: 'Semua Waktu' },
+  { value: 'harian', label: 'Harian (Hari Ini)' },
+  { value: 'bulanan', label: 'Bulanan (Bulan Ini)' },
+];
+
+function matchesPeriod(registeredSince, period) {
+  if (period === 'semua') return true;
+  const d = new Date(registeredSince);
+  if (Number.isNaN(d.getTime())) return false;
+  const now = new Date();
+  const sameMonth = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+  if (period === 'bulanan') return sameMonth;
+  if (period === 'harian') return sameMonth && d.getDate() === now.getDate();
+  return true;
+}
+
 const CATEGORY_BADGE = {
   VVIP: 'border-transparent bg-[rgba(180,83,9,0.08)] text-[#b45309]',
   VIP: 'border-transparent bg-[rgba(33,140,33,0.08)] text-[#218c21]',
@@ -72,6 +93,7 @@ export default function Records() {
   const [loadError, setLoadError] = useState(null);
   const [query, setQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('Semua');
+  const [periodFilter, setPeriodFilter] = useState('semua');
   const [sortBy, setSortBy] = useState('recent');
   const [selectedPatientId, setSelectedPatientId] = useState(null);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -245,7 +267,8 @@ export default function Records() {
         p.mrn.toLowerCase().includes(trimmed) ||
         (p.phone ?? '').replace(/-/g, '').includes(trimmed.replace(/-/g, ''));
       const matchesCategory = categoryFilter === 'Semua' || p.category === categoryFilter;
-      return matchesQuery && matchesCategory;
+      const matchesPeriodFilter = matchesPeriod(p.registeredSince, periodFilter);
+      return matchesQuery && matchesCategory && matchesPeriodFilter;
     });
 
     result = [...result].sort((a, b) => {
@@ -255,7 +278,7 @@ export default function Records() {
     });
 
     return result;
-  }, [patients, query, categoryFilter, sortBy]);
+  }, [patients, query, categoryFilter, periodFilter, sortBy]);
 
   const stats = useMemo(() => {
     const total = patients.length;
@@ -449,6 +472,21 @@ export default function Records() {
                     {CATEGORY_FILTERS.map((option) => (
                       <SelectItem key={option} value={option}>
                         {option === 'Semua' ? 'Semua Kategori' : option}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {/* Filters the roster by "Terdaftar Sejak" (registration date) —
+                    Harian = terdaftar hari ini, Bulanan = terdaftar bulan ini. */}
+                <Select value={periodFilter} onValueChange={setPeriodFilter}>
+                  <SelectTrigger className="h-10 rounded-3xl border-[#e2e8f0] px-4 text-sm shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)]">
+                    <SelectValue placeholder="Periode" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PERIOD_FILTERS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
