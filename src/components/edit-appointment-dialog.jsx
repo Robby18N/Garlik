@@ -160,8 +160,19 @@ export default function EditAppointmentDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="overflow-hidden rounded-2xl p-0 sm:max-w-lg">
-        <DialogHeader className="gap-1 border-b border-[#e2e8f0] px-6 pt-5 pb-4">
+      {/* flex + max-h-[85vh] turns this into a fixed-height column instead
+          of a box that just keeps growing with its content. Combined with
+          the body below taking flex-1 + overflow-y-auto, that's what
+          actually makes the form scrollable — the header and footer sit in
+          shrink-0 slots so Save/Cancel stay reachable (pinned at the
+          bottom) no matter how tall the middle section gets. Previously
+          this only had `overflow-hidden` with no height limit and no
+          scroll container anywhere, so on a short viewport (or with the MR
+          section's 3 options all showing) the bottom of the form —
+          including the Save/Cancel buttons — was clipped off with no way
+          to scroll to it at all, not just "not scrolled yet". */}
+      <DialogContent className="flex max-h-[85vh] flex-col overflow-hidden rounded-2xl p-0 sm:max-w-lg">
+        <DialogHeader className="shrink-0 gap-1 border-b border-[#e2e8f0] px-6 pt-5 pb-4">
           <DialogTitle className="text-base font-semibold text-[#020617]">
             Edit Appointment
           </DialogTitle>
@@ -170,7 +181,7 @@ export default function EditAppointmentDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-4 px-6 py-5">
+        <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-6 py-5">
           <FieldRow className="flex-wrap">
             <SelectField
               label="Doctor"
@@ -287,7 +298,7 @@ export default function EditAppointmentDialog({
           </FieldRow>
         </div>
 
-        <div className="flex items-center justify-end gap-3 border-t border-[#e2e8f0] px-6 py-4">
+        <div className="flex shrink-0 items-center justify-end gap-3 border-t border-[#e2e8f0] px-6 py-4">
           <button
             type="button"
             onClick={() => onOpenChange(false)}
