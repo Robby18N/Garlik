@@ -51,7 +51,6 @@ import PatientNameHoverCard from '@/components/patient-name-hover-card';
 import PatientDetailSheet from '@/components/patient-detail-sheet';
 import PatientNotFoundDialog from '@/components/patient-not-found-dialog';
 import PatientFoundDialog from '@/components/patient-found-dialog';
-import MakeAppointmentDialog from '@/components/make-appointment-dialog';
 import EditAppointmentDialog from '@/components/edit-appointment-dialog';
 import SettingRoomLabDialog from '@/components/setting-room-lab-dialog';
 import MrCheckIcon from '@/components/mr-check-icon';
@@ -756,17 +755,14 @@ export default function TodaysPatient() {
   const [roomLabSettingOpen, setRoomLabSettingOpen] = useState(false);
   const [roomLabSettings, setRoomLabSettings] = useState(null);
 
-  // "Buat Appointment" popup opened from the toolbar's "Appointment" button —
-  // finds an already-registered patient, then books their appointment
-  // (doctor/room/keluhan/duration/date/time). It also opens (pre-filled,
-  // skipping the search step) from PatientFoundDialog's "Appointment" CTA —
-  // `appointmentPreselect` carries that patient across in that case.
-  const [appointmentDialogOpen, setAppointmentDialogOpen] = useState(false);
-  const [appointmentPreselect, setAppointmentPreselect] = useState(null);
-
+  // PatientFoundDialog's "Appointment" CTA — patient's already identified,
+  // so instead of the old popup this now lands on the same full-page
+  // Calendar Appointment view as the toolbar button, with that patient
+  // carried over via navigation state. Booking from any slot's "+" there
+  // then skips straight to "Detail Appointment" for this patient (see
+  // CalendarAppointment.jsx), the same shortcut the old popup gave.
   function handleBookFoundAppointment(patient) {
-    setAppointmentPreselect(patient);
-    setAppointmentDialogOpen(true);
+    navigate('/calendar-appointment', { state: { preselectedPatient: patient } });
   }
 
   // "Edit Appointment" popup opened from each row's pencil icon — lets
@@ -1505,15 +1501,6 @@ export default function TodaysPatient() {
             onOpenChange={setFoundOpen}
             patient={foundPatient}
             onBookAppointment={handleBookFoundAppointment}
-          />
-          <MakeAppointmentDialog
-            open={appointmentDialogOpen}
-            onOpenChange={(next) => {
-              setAppointmentDialogOpen(next);
-              if (!next) setAppointmentPreselect(null);
-            }}
-            onBooked={loadAppointments}
-            preselectedPatient={appointmentPreselect}
           />
           <EditAppointmentDialog
             open={editDialogOpen}

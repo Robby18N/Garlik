@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft,
   ChevronLeft,
@@ -12,6 +12,8 @@ import {
   Clock,
   PlusCircle,
   Loader2,
+  X,
+  UserCheck,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -159,6 +161,7 @@ function AppointmentCard({ appt }) {
 
 export default function CalendarAppointment() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [calendarCursor, setCalendarCursor] = useState(() => startOfMonth(new Date()));
   const [appointments, setAppointments] = useState([]);
@@ -169,6 +172,15 @@ export default function CalendarAppointment() {
   const [treatmentFocused, setTreatmentFocused] = useState(false);
   const [bookingOpen, setBookingOpen] = useState(false);
   const [bookingPrefill, setBookingPrefill] = useState(null);
+  // Carried over from PatientFoundDialog's "Appointment" CTA (Today's
+  // Patient's search-result popup) via navigation state — that flow already
+  // knows which patient, so every "+" click here should skip straight to
+  // "Detail Appointment" for them instead of making the receptionist search
+  // again. The banner below lets them drop it and go back to picking a
+  // patient per slot, if they opened this page for someone else instead.
+  const [preselectedPatient, setPreselectedPatient] = useState(
+    () => location.state?.preselectedPatient ?? null
+  );
   const blurTimer = useRef(null);
 
   const selectedDateStr = useMemo(() => toDateStr(selectedDate), [selectedDate]);
@@ -434,6 +446,26 @@ export default function CalendarAppointment() {
 
         {/* Main grid */}
         <div className="flex h-full min-w-0 flex-1 flex-col overflow-y-auto">
+          {preselectedPatient && (
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-green-100 bg-green-50/70 px-4 py-2.5">
+              <div className="flex min-w-0 items-center gap-2 text-sm text-green-800">
+                <UserCheck className="size-4 shrink-0" />
+                <span className="truncate">
+                  Membuat appointment untuk <strong className="font-semibold">{preselectedPatient.name}</strong>
+                  {preselectedPatient.mrn ? ` · ${preselectedPatient.mrn}` : ''} — klik tombol{' '}
+                  <strong className="font-semibold">+</strong> di jam yang tersedia.
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreselectedPatient(null)}
+                className="flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-100"
+              >
+                <X className="size-3.5" />
+                Batal
+              </button>
+            </div>
+          )}
           <div className="flex w-full items-stretch border-b border-black/[0.08] bg-white">
             <div className="flex w-[110px] shrink-0 items-center px-4 py-3">
               <p className="text-sm font-medium leading-tight text-[#050505]">
@@ -554,6 +586,7 @@ export default function CalendarAppointment() {
           loadMonthDots(calendarCursor);
         }}
         prefill={bookingPrefill}
+        preselectedPatient={preselectedPatient}
       />
     </div>
   );
