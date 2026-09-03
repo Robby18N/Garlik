@@ -12,6 +12,7 @@ import Billing from '@/pages/Billing';
 import Reminders from '@/pages/Reminders';
 import Dashboard from '@/pages/Dashboard';
 import Schedule from '@/pages/Schedule';
+import CalendarAppointment from '@/pages/CalendarAppointment';
 import Prescription from '@/pages/Prescription';
 import Database from '@/pages/Database';
 import PageTransition from '@/components/page-transition';
@@ -124,6 +125,16 @@ function AnimatedRoutes() {
             <PageTransition>
               <RequireAuth>
                 <Schedule />
+              </RequireAuth>
+            </PageTransition>
+          }
+        />
+        <Route
+          path="/calendar-appointment"
+          element={
+            <PageTransition>
+              <RequireAuth>
+                <CalendarAppointment />
               </RequireAuth>
             </PageTransition>
           }

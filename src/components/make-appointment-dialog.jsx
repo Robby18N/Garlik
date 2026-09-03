@@ -45,6 +45,12 @@ export default function MakeAppointmentDialog({
   onOpenChange,
   onBooked,
   preselectedPatient = null,
+  // Optional { doctor, room, keluhan, duration, date, time } to seed step 2
+  // with — used by Calendar Appointment's per-slot "+" button so a booking
+  // started from a specific time slot doesn't make the receptionist retype
+  // the date/time/doctor that slot already implies. Anything omitted just
+  // falls back to initialAppointment's blank value as usual.
+  prefill = null,
 }) {
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
@@ -67,6 +73,16 @@ export default function MakeAppointmentDialog({
     // open, internal navigation (Ganti Pasien / Back) should take over.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, preselectedPatient]);
+
+  // Applies `prefill` fresh every time the dialog opens (not on every
+  // keystroke afterwards — deliberately keyed on `open`/`prefill` only, so
+  // once it's open the receptionist's own edits to these fields stick).
+  useEffect(() => {
+    if (open && prefill) {
+      setAppointment((prev) => ({ ...prev, ...prefill }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, prefill]);
 
   // Searches the real `patients` table in Supabase — booking an appointment
   // is for a patient who's already in the system, so step 1 looks them up

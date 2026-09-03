@@ -1249,7 +1249,7 @@ export default function TodaysPatient() {
 
                     <Button
                       size="sm"
-                      onClick={() => setAppointmentDialogOpen(true)}
+                      onClick={() => navigate('/calendar-appointment')}
                       className="h-9 rounded-3xl bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700"
                     >
                       <Plus className="size-4" />
