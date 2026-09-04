@@ -19,6 +19,7 @@ import { toast } from 'sonner';
 
 import AccountMenu from '@/components/account-menu';
 import MakeAppointmentDialog from '@/components/make-appointment-dialog';
+import AddWaitingListDialog from '@/components/add-waiting-list-dialog';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { DOCTORS } from '@/context/role-context';
@@ -121,6 +122,35 @@ function buildMonthGrid(cursor) {
   return weeks;
 }
 
+// Compact "alasan · waktu" caption for a waiting-list sidebar row — leads
+// with *why* the patient is waiting (a specific doctor, a specific promo,
+// or both — see AddWaitingListDialog) since that's the thing a receptionist
+// actually needs to notice when a doctor opens up or a promo goes live, not
+// just a bare doctor name. Flexible entries (no appt_date/appt_time at all)
+// read just as naturally as a scheduled one instead of showing an empty date.
+function formatWaitingSubtitle(entry) {
+  const waktuLabel =
+    entry.is_flexible || !entry.appt_date
+      ? 'Fleksibel'
+      : `${entry.appt_date}${entry.appt_time ? `, ${entry.appt_time.slice(0, 5)}` : ''}`;
+
+  let reasonLabel;
+  if (entry.reason === 'dokter') {
+    reasonLabel = `Menunggu ${entry.doctor || 'dokter'} tersedia`;
+  } else if (entry.reason === 'promo') {
+    reasonLabel = `Menunggu promo${entry.promo_label ? ` "${entry.promo_label}"` : ''} tersedia`;
+  } else if (entry.reason === 'keduanya') {
+    reasonLabel = `Menunggu ${entry.doctor || 'dokter'}${
+      entry.promo_label ? ` & promo "${entry.promo_label}"` : ''
+    }`;
+  } else {
+    // Entries saved before the "reason" field existed — fall back to the
+    // old plain doctor caption instead of showing a blank reason.
+    reasonLabel = entry.doctor || 'Siapa saja';
+  }
+  return `${reasonLabel} · ${waktuLabel}`;
+}
+
 function DoctorPill({ children, muted }) {
   return (
     <span
@@ -181,6 +211,8 @@ export default function CalendarAppointment() {
   const [preselectedPatient, setPreselectedPatient] = useState(
     () => location.state?.preselectedPatient ?? null
   );
+  const [waitingListOpen, setWaitingListOpen] = useState(false);
+  const [waitingListEntries, setWaitingListEntries] = useState([]);
   const blurTimer = useRef(null);
 
   const selectedDateStr = useMemo(() => toDateStr(selectedDate), [selectedDate]);
@@ -237,6 +269,39 @@ export default function CalendarAppointment() {
   useEffect(() => {
     loadMonthDots(calendarCursor);
   }, [calendarCursor, loadMonthDots]);
+
+  // "Add Waiting list" entries — prospective/walk-in patients who aren't
+  // slotted into a specific day yet (some are deliberately "Fleksibel", no
+  // date at all), so unlike appointments this list isn't scoped to
+  // `selectedDate` — it just loads once and stays in sync with add/remove.
+  const loadWaitingList = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('appointment_waiting_list')
+      .select('id, name, phone, reason, doctor, is_promo, promo_label, price, is_flexible, appt_date, appt_time')
+      .order('created_at', { ascending: false });
+    if (error) {
+      console.error('Failed to load appointment waiting list', error);
+      toast.error('Gagal memuat waiting list.');
+      return;
+    }
+    setWaitingListEntries(data ?? []);
+  }, []);
+
+  useEffect(() => {
+    loadWaitingList();
+  }, [loadWaitingList]);
+
+  async function removeWaitingListEntry(id) {
+    const removed = waitingListEntries.find((e) => e.id === id);
+    setWaitingListEntries((prev) => prev.filter((e) => e.id !== id));
+
+    const { error } = await supabase.from('appointment_waiting_list').delete().eq('id', id);
+    if (error) {
+      console.error('Failed to delete waiting list entry', error);
+      toast.error('Gagal menghapus dari waiting list — coba lagi.');
+      if (removed) setWaitingListEntries((prev) => [removed, ...prev]);
+    }
+  }
 
   function goToday() {
     const now = new Date();
@@ -434,14 +499,52 @@ export default function CalendarAppointment() {
               ))}
           </div>
 
-          <button
-            type="button"
-            onClick={() => toast.info('Fitur Waiting List akan segera hadir.')}
-            className="flex h-9 w-full items-center justify-center gap-2 rounded-3xl border border-[#16a34a] bg-white text-sm font-medium text-[#636363] hover:bg-green-50/60"
-          >
-            <Clock className="size-4" />
-            Add Waiting list
-          </button>
+          <div className="flex flex-col gap-3">
+            <button
+              type="button"
+              onClick={() => setWaitingListOpen(true)}
+              className="flex h-9 w-full shrink-0 items-center justify-center gap-2 rounded-3xl border border-[#16a34a] bg-white text-sm font-medium text-[#636363] hover:bg-green-50/60"
+            >
+              <Clock className="size-4" />
+              Add Waiting list
+            </button>
+
+            {waitingListEntries.length > 0 && (
+              <div className="flex flex-col gap-2">
+                {waitingListEntries.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className="group flex items-start justify-between gap-2 rounded-lg bg-black/[0.02] px-3 py-2"
+                  >
+                    <div className="flex min-w-0 flex-1 flex-col text-sm">
+                      <span className="flex items-center gap-1.5 truncate text-[#1f1f1f]">
+                        {entry.name}
+                        {entry.is_promo && (
+                          <span className="shrink-0 rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700">
+                            Promo
+                          </span>
+                        )}
+                      </span>
+                      <span className="truncate text-xs text-[#636363]">{formatWaitingSubtitle(entry)}</span>
+                      {entry.price != null && (
+                        <span className="truncate text-xs font-medium text-[#050505]">
+                          {formatRupiah(entry.price)}
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      aria-label={`Hapus ${entry.name} dari waiting list`}
+                      onClick={() => removeWaitingListEntry(entry.id)}
+                      className="shrink-0 text-slate-300 opacity-0 hover:text-slate-500 group-hover:opacity-100"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Main grid */}
@@ -587,6 +690,12 @@ export default function CalendarAppointment() {
         }}
         prefill={bookingPrefill}
         preselectedPatient={preselectedPatient}
+      />
+
+      <AddWaitingListDialog
+        open={waitingListOpen}
+        onOpenChange={setWaitingListOpen}
+        onAdded={(row) => setWaitingListEntries((prev) => [row, ...prev])}
       />
     </div>
   );
