@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, X, UserPlus, ArrowLeft, Loader2, Plus, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { cn, resolveDayBucket } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { escapeIlike } from '@/lib/patients';
-import { formatRupiah, getTreatmentPrice } from '@/lib/treatment-prices';
+import { formatRupiah, getTreatmentPrice, searchTreatmentPrices } from '@/lib/treatment-prices';
 
 const DOCTORS = ['drg. SM', 'drg. AN', 'drg. RF'];
 const DURATIONS = ['30 Min', '45 Min', '60 Min', '90 Min'];
@@ -67,6 +67,8 @@ export default function MakeAppointmentDialog({
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [booking, setBooking] = useState(false);
+  const [keluhanFocused, setKeluhanFocused] = useState(false);
+  const keluhanBlurTimer = useRef(null);
 
   // When opened from the "already registered" search-result popup, the
   // patient is already known — skip straight to step 1 (Detail Appointment)
@@ -135,6 +137,21 @@ export default function MakeAppointmentDialog({
     () => getTreatmentPrice(appointment.keluhan),
     [appointment.keluhan]
   );
+
+  // Same suggestion list as Calendar Appointment's "Cek Harga Treatment"
+  // search box — lets the receptionist pick a known treatment name (with
+  // its price shown right there) instead of free-typing something that
+  // might not match the price list at all.
+  const keluhanSuggestions = useMemo(
+    () => searchTreatmentPrices(appointment.keluhan),
+    [appointment.keluhan]
+  );
+
+  function handleSelectKeluhanSuggestion(name) {
+    if (keluhanBlurTimer.current) clearTimeout(keluhanBlurTimer.current);
+    updateAppointment('keluhan', name);
+    setKeluhanFocused(false);
+  }
 
   function resetState() {
     setStep(0);
@@ -363,15 +380,47 @@ export default function MakeAppointmentDialog({
                 </div>
               </div>
 
-              <div className="flex w-full flex-col gap-2">
+              <div className="relative flex w-full flex-col gap-2">
                 <p className="text-sm font-medium text-[#0f0d0a]">Keluhan</p>
                 <textarea
                   rows={2}
                   value={appointment.keluhan}
                   onChange={(e) => updateAppointment('keluhan', e.target.value)}
+                  onFocus={() => {
+                    if (keluhanBlurTimer.current) clearTimeout(keluhanBlurTimer.current);
+                    setKeluhanFocused(true);
+                  }}
+                  onBlur={() => {
+                    keluhanBlurTimer.current = setTimeout(() => setKeluhanFocused(false), 150);
+                  }}
                   placeholder="Type here.."
                   className="w-full resize-none rounded-xl border border-[#e2e8f0] bg-white p-3 text-sm text-[#0f0d0a] placeholder:text-[#94a3b8] focus:outline-none focus:ring-2 focus:ring-green-600/20"
                 />
+                {/* Treatment-name autocomplete, same reference price list as
+                    Calendar Appointment's "Cek Harga Treatment" search —
+                    picking a suggestion fills Keluhan with that exact name
+                    so "Harga Treatment" below resolves to an exact match. */}
+                {keluhanFocused && appointment.keluhan.trim() && (
+                  <div className="absolute left-0 top-full z-20 mt-1 w-full overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
+                    {keluhanSuggestions.length === 0 ? (
+                      <p className="px-3 py-2 text-sm text-slate-400">Tidak ditemukan</p>
+                    ) : (
+                      keluhanSuggestions.map((t) => (
+                        <button
+                          type="button"
+                          key={t.name}
+                          onClick={() => handleSelectKeluhanSuggestion(t.name)}
+                          className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-slate-50"
+                        >
+                          <span className="truncate text-slate-700">{t.name}</span>
+                          <span className="shrink-0 font-medium text-slate-900">
+                            {formatRupiah(t.price)}
+                          </span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="flex w-full flex-col gap-2">
