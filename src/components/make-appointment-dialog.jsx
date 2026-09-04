@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, X, UserPlus, CalendarPlus, ArrowLeft, Loader2 } from 'lucide-react';
+import { Search, X, UserPlus, ArrowLeft, Loader2, Plus, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 
 import {
@@ -8,25 +8,30 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import Stepper from '@/components/stepper';
-import { SelectField, TextField, DateField, FieldRow } from '@/components/form-fields';
 import { cn, resolveDayBucket } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { escapeIlike } from '@/lib/patients';
-
-const STEPS = ['Pilih Pasien', 'Detail Appointment'];
+import { formatRupiah, getTreatmentPrice } from '@/lib/treatment-prices';
 
 const DOCTORS = ['drg. SM', 'drg. AN', 'drg. RF'];
-const ROOMS = ['R1', 'R2', 'R3'];
 const DURATIONS = ['30 Min', '45 Min', '60 Min', '90 Min'];
+
+// Same room <-> doctor assignment already used across Dashboard/Activity's
+// room-status widgets (R1 = drg. SM, R2 = drg. AN, R3 = drg. RF). The new
+// "Buat Appointment" design (Figma node 820:649) dropped the separate Room
+// selector, so the room is derived from whichever doctor gets picked
+// instead of being asked for twice.
+const ROOM_BY_DOCTOR = {
+  'drg. SM': 'R1',
+  'drg. AN': 'R2',
+  'drg. RF': 'R3',
+};
 
 const initialAppointment = {
   doctor: '',
-  room: '',
   keluhan: '',
   duration: '',
   date: '',
@@ -34,11 +39,13 @@ const initialAppointment = {
 };
 
 /**
- * Booking flow behind Today's Patient's "+ Appointment" toolbar button —
+ * Booking flow triggered by Calendar Appointment's per-slot "+" button —
  * distinct from "New Registration" because it's for a patient who's
- * already in the system: step 1 finds/selects that existing patient, step
- * 2 captures the appointment details (doctor/room/keluhan/duration/date/
- * time), matching the same fields Today's Patient's table itself displays.
+ * already in the system: step 1 finds/selects that existing patient
+ * (skipped when `preselectedPatient` is already known), step 2 captures
+ * the appointment's remaining details. Date/time/room are never asked
+ * here: date & time come from whichever slot the "+" was clicked on
+ * (`prefill`), and room follows automatically from the chosen doctor.
  */
 export default function MakeAppointmentDialog({
   open,
@@ -121,6 +128,14 @@ export default function MakeAppointmentDialog({
     };
   }, [query, open]);
 
+  // The new design auto-fills "Harga Treatment" straight from Keluhan —
+  // same reference price list Calendar Appointment already shows on its
+  // appointment cards and treatment search box.
+  const estimatedPrice = useMemo(
+    () => getTreatmentPrice(appointment.keluhan),
+    [appointment.keluhan]
+  );
+
   function resetState() {
     setStep(0);
     setQuery('');
@@ -158,7 +173,6 @@ export default function MakeAppointmentDialog({
   async function handleBook() {
     const required = [
       ['doctor', 'Doctor'],
-      ['room', 'Room'],
       ['date', 'Appointment Date'],
       ['time', 'Appointment Time'],
     ];
@@ -174,7 +188,7 @@ export default function MakeAppointmentDialog({
       appt_date: appointment.date,
       appt_time: appointment.time,
       dokter: appointment.doctor,
-      room: appointment.room,
+      room: ROOM_BY_DOCTOR[appointment.doctor] ?? '-',
       keluhan: appointment.keluhan || '-',
       durasi: appointment.duration || '-',
       // "Dalam Antrean" (neutral — no claimed elapsed time), not
@@ -206,27 +220,24 @@ export default function MakeAppointmentDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="overflow-hidden rounded-2xl p-0 sm:max-w-xl">
-        <DialogHeader className="gap-1 border-b border-[#e2e8f0] px-6 pt-5 pb-4">
-          <DialogTitle className="text-base font-semibold text-[#020617]">
+      <DialogContent
+        showCloseButton={false}
+        className="overflow-hidden rounded-[20px] p-0 sm:max-w-[560px]"
+      >
+        <DialogHeader className="relative gap-2 px-6 pt-6 pb-5">
+          <DialogTitle className="text-[20px] font-semibold text-[#0f0d0a]">
             Buat Appointment
           </DialogTitle>
-          <DialogDescription className="text-sm text-[#64748b]">
-            Cari pasien yang sudah terdaftar, lalu tentukan jadwal appointment-nya.
-          </DialogDescription>
+          <button
+            type="button"
+            aria-label="Close"
+            onClick={() => handleOpenChange(false)}
+            className="absolute right-6 top-6 flex size-7 items-center justify-center rounded-full bg-black/[0.03] text-[#0f0d0a] hover:bg-black/[0.06]"
+          >
+            <X className="size-3.5" />
+          </button>
         </DialogHeader>
-
-        <div className="relative flex items-center justify-center overflow-hidden border-b border-[#e2e8f0] py-5">
-          <div
-            aria-hidden="true"
-            className="absolute inset-0 opacity-[0.35]"
-            style={{
-              backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)',
-              backgroundSize: '14px 14px',
-            }}
-          />
-          <Stepper steps={STEPS} activeIndex={step} className="relative" />
-        </div>
+        <div className="h-px w-full shrink-0 bg-[#e2e8f0]" />
 
         <div className="flex max-h-[60vh] flex-col gap-4 overflow-y-auto px-6 py-5">
           {step === 0 ? (
@@ -311,82 +322,97 @@ export default function MakeAppointmentDialog({
             </>
           ) : (
             <>
-              <div className="flex items-center justify-between rounded-xl border border-[#e2e8f0] bg-slate-50/60 px-4 py-3">
-                <div className="flex flex-col">
-                  <span className="text-sm font-semibold text-[#020617]">{selectedPatient?.name}</span>
-                  <span className="text-xs text-[#64748b]">{selectedPatient?.mrn}</span>
+              <div className="flex w-full items-center justify-between rounded-xl border border-[#e2e8f0] bg-[#f8fafc] p-4">
+                <div className="flex flex-col gap-1">
+                  <p className="text-[16px] font-semibold text-[#0f0d0a]">{selectedPatient?.name}</p>
+                  <p className="text-sm text-[#475569]">
+                    {selectedPatient?.mrn}
+                    {selectedPatient?.phone ? ` | ${selectedPatient.phone}` : ''}
+                  </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setStep(0)}
-                  className="inline-flex items-center gap-1 text-xs font-medium text-[#3b82f6] hover:underline"
+                  className="flex shrink-0 items-center gap-1 rounded-md border border-[#e2e8f0] bg-white px-2 py-1 text-xs font-medium text-[#3b82f6] hover:bg-blue-50"
                 >
-                  <ArrowLeft className="size-3.5" />
+                  <ArrowLeft className="size-3" />
                   Ganti Pasien
                 </button>
               </div>
 
-              <FieldRow className="flex-wrap">
-                <SelectField
-                  label="Doctor"
-                  required
-                  options={DOCTORS}
-                  value={appointment.doctor}
-                  onChange={(e) => updateAppointment('doctor', e.target.value)}
-                  style={{ flexGrow: 160, flexBasis: '160px' }}
-                />
-                <SelectField
-                  label="Room"
-                  required
-                  options={ROOMS}
-                  value={appointment.room}
-                  onChange={(e) => updateAppointment('room', e.target.value)}
-                  style={{ flexGrow: 160, flexBasis: '160px' }}
-                />
-                <SelectField
-                  label="Est. Duration"
-                  options={DURATIONS}
-                  value={appointment.duration}
-                  onChange={(e) => updateAppointment('duration', e.target.value)}
-                  style={{ flexGrow: 160, flexBasis: '160px' }}
-                />
-              </FieldRow>
-              <FieldRow className="flex-wrap">
-                <TextField
-                  label="Keluhan"
-                  placeholder="Type here.."
+              <div className="flex w-full flex-col gap-2">
+                <p className="flex items-center gap-0.5 text-sm font-medium text-[#0f0d0a]">
+                  Doctor <span className="text-[#dc2626]">*</span>
+                </p>
+                <div className="flex h-[42px] w-full items-center gap-4 rounded-xl border border-[rgba(15,13,10,0.08)] px-4">
+                  {DOCTORS.map((doctor) => (
+                    <label
+                      key={doctor}
+                      className="flex cursor-pointer items-center gap-2 text-sm text-[#404040]"
+                    >
+                      <input
+                        type="radio"
+                        name="doctor"
+                        className="size-4 accent-[#48a153]"
+                        checked={appointment.doctor === doctor}
+                        onChange={() => updateAppointment('doctor', doctor)}
+                      />
+                      {doctor}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex w-full flex-col gap-2">
+                <p className="text-sm font-medium text-[#0f0d0a]">Keluhan</p>
+                <textarea
+                  rows={2}
                   value={appointment.keluhan}
                   onChange={(e) => updateAppointment('keluhan', e.target.value)}
-                  style={{ flexGrow: 260, flexBasis: '260px' }}
+                  placeholder="Type here.."
+                  className="w-full resize-none rounded-xl border border-[#e2e8f0] bg-white p-3 text-sm text-[#0f0d0a] placeholder:text-[#94a3b8] focus:outline-none focus:ring-2 focus:ring-green-600/20"
                 />
-              </FieldRow>
-              <FieldRow className="flex-wrap">
-                <DateField
-                  label="Appointment Date"
-                  required
-                  iconPosition="right"
-                  value={appointment.date}
-                  onChange={(e) => updateAppointment('date', e.target.value)}
-                  style={{ flexGrow: 200, flexBasis: '200px' }}
-                />
-                <TextField
-                  label="Appointment Time"
-                  required
-                  type="time"
-                  value={appointment.time}
-                  onChange={(e) => updateAppointment('time', e.target.value)}
-                  style={{ flexGrow: 200, flexBasis: '200px' }}
-                />
-              </FieldRow>
+              </div>
+
+              <div className="flex w-full flex-col gap-2">
+                <p className="text-sm font-medium text-[#636363]">
+                  Harga Treatment <span className="font-normal">(Otomatis terisi)</span>
+                </p>
+                <div className="w-full rounded-xl border border-[#e2e8f0] bg-[#f5f3f2] p-3 text-sm text-[#0f0d0a]">
+                  {formatRupiah(estimatedPrice)}
+                </div>
+              </div>
+
+              <div className="flex w-full flex-col gap-2">
+                <p className="text-sm font-medium text-[#0f0d0a]">Est. Duration</p>
+                <div className="relative flex h-[42px] w-full items-center rounded-xl border border-[#e2e8f0] bg-white px-4">
+                  <select
+                    value={appointment.duration}
+                    onChange={(e) => updateAppointment('duration', e.target.value)}
+                    className="w-full appearance-none bg-transparent text-sm text-[#0f0d0a] focus:outline-none"
+                  >
+                    <option value="" disabled>
+                      Select..
+                    </option>
+                    {DURATIONS.map((d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-4 size-3.5 text-[#0f0d0a]" />
+                </div>
+              </div>
             </>
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-3 border-t border-[#e2e8f0] px-6 py-4">
+        <div className="h-px w-full shrink-0 bg-[#e2e8f0]" />
+        <div className="flex items-center justify-between bg-[#faf9f9] px-5 py-5">
           <button
             type="button"
             onClick={() => (step === 0 ? handleOpenChange(false) : setStep(0))}
-            className="min-h-9 rounded-lg border border-solid border-[#ef4444] px-6 py-2.5 text-sm font-medium text-[#ef4444] hover:bg-red-50"
+            className="rounded-xl border border-solid border-[#dc2626] bg-white px-6 py-3 text-sm font-semibold text-[#dc2626] hover:bg-red-50"
           >
             {step === 0 ? 'Cancel' : 'Back'}
           </button>
@@ -395,7 +421,7 @@ export default function MakeAppointmentDialog({
               type="button"
               onClick={handleNext}
               disabled={results.length === 0}
-              className="min-h-9 rounded-lg bg-[#16a34a] px-6 py-2.5 text-sm font-medium text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-xl bg-[#48a153] px-6 py-3 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Next
             </button>
@@ -404,9 +430,9 @@ export default function MakeAppointmentDialog({
               type="button"
               onClick={handleBook}
               disabled={booking}
-              className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-[#16a34a] px-6 py-2.5 text-sm font-medium text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-70"
+              className="inline-flex items-center gap-2 rounded-xl bg-[#48a153] px-6 py-3 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
             >
-              {booking ? <Loader2 className="size-4 animate-spin" /> : <CalendarPlus className="size-4" />}
+              {booking ? <Loader2 className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}
               Buat Appointment
             </button>
           )}
